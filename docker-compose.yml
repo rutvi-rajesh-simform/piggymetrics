@@ -1,18 +1,11 @@
 version: '2.1'
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    restart: always
-    ports:
-      - 15672:15672
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   config:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
     image: sqshq/piggymetrics-config
     restart: always
     logging:
@@ -20,24 +13,14 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  registry:
-    environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-registry
-    restart: always
-    depends_on:
-      config:
-        condition: service_healthy
-    ports:
-      - 8761:8761
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   gateway:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-gateway
     restart: always
     depends_on:
@@ -52,11 +35,15 @@ services:
 
   auth-service:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-      NOTIFICATION_SERVICE_PASSWORD: $NOTIFICATION_SERVICE_PASSWORD
-      STATISTICS_SERVICE_PASSWORD: $STATISTICS_SERVICE_PASSWORD
-      ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      NOTIFICATION_SERVICE_PASSWORD: ${NOTIFICATION_SERVICE_PASSWORD}
+      STATISTICS_SERVICE_PASSWORD: ${STATISTICS_SERVICE_PASSWORD}
+      ACCOUNT_SERVICE_PASSWORD: ${ACCOUNT_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-auth-service
     restart: always
     depends_on:
@@ -67,21 +54,15 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  auth-mongodb:
-    environment:
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
-    restart: always
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   account-service:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-      ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      ACCOUNT_SERVICE_PASSWORD: ${ACCOUNT_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-account-service
     restart: always
     depends_on:
@@ -92,22 +73,15 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  account-mongodb:
-    environment:
-      INIT_DUMP: account-service-dump.js
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
-    restart: always
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   statistics-service:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-      STATISTICS_SERVICE_PASSWORD: $STATISTICS_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      STATISTICS_SERVICE_PASSWORD: ${STATISTICS_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-statistics-service
     restart: always
     depends_on:
@@ -118,21 +92,15 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  statistics-mongodb:
-    environment:
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
-    restart: always
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   notification-service:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-      NOTIFICATION_SERVICE_PASSWORD: $NOTIFICATION_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      NOTIFICATION_SERVICE_PASSWORD: ${NOTIFICATION_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-notification-service
     restart: always
     depends_on:
@@ -143,19 +111,14 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  notification-mongodb:
-    image: sqshq/piggymetrics-mongodb
-    restart: always
-    environment:
-      MONGODB_PASSWORD: $MONGODB_PASSWORD
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   monitoring:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-monitoring
     restart: always
     depends_on:
@@ -170,14 +133,19 @@ services:
 
   turbine-stream-service:
     environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      SPRING_PROFILES_ACTIVE: cloud
+      AWS_REGION: ${AWS_REGION}
+      SECRETS_MANAGER_SECRET_NAME: ${SECRETS_MANAGER_SECRET_NAME}
+      CONFIG_SERVICE_PASSWORD: ${CONFIG_SERVICE_PASSWORD}
+      AMAZON_MQ_BROKER_URL: ${AMAZON_MQ_BROKER_URL}
+      DOCUMENTDB_URI: ${DOCUMENTDB_URI}
     image: sqshq/piggymetrics-turbine-stream-service
     restart: always
     depends_on:
       config:
         condition: service_healthy
     ports:
-    - 8989:8989
+      - 8989:8989
     logging:
       options:
         max-size: "10m"
