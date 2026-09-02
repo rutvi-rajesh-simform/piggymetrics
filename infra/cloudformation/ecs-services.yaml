@@ -1,0 +1,231 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS service deployment units with AWS Cloud Map service-discovery registration for inter-service communication.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment prefix for resource naming.
+
+  ClusterArn:
+    Type: String
+    Description: ARN of the target ECS cluster.
+
+  PrivateDnsNamespaceId:
+    Type: String
+    Description: Cloud Map private DNS namespace ID (for example, ns-xxxxxxxxxxxx).
+
+  PrivateDnsNamespaceName:
+    Type: String
+    Description: Cloud Map private DNS namespace name (for example, internal.local).
+
+  ServiceSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnet IDs used by ECS services.
+
+  ServiceSecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups attached to ECS tasks.
+
+  ApiTaskDefinitionArn:
+    Type: String
+    Description: Task definition ARN for the API service.
+
+  WorkerTaskDefinitionArn:
+    Type: String
+    Description: Task definition ARN for the worker service.
+
+  NotificationTaskDefinitionArn:
+    Type: String
+    Description: Task definition ARN for the notification service.
+
+  ApiContainerName:
+    Type: String
+    Default: api
+
+  WorkerContainerName:
+    Type: String
+    Default: worker
+
+  NotificationContainerName:
+    Type: String
+    Default: notification
+
+  ApiContainerPort:
+    Type: Number
+    Default: 8080
+
+  WorkerContainerPort:
+    Type: Number
+    Default: 8081
+
+  NotificationContainerPort:
+    Type: Number
+    Default: 8082
+
+  ApiDesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+
+  WorkerDesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+
+  NotificationDesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+
+Resources:
+  ApiDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Sub '${EnvironmentName}-api'
+      NamespaceId: !Ref PrivateDnsNamespaceId
+      DnsConfig:
+        RoutingPolicy: WEIGHTED
+        DnsRecords:
+          - Type: A
+            TTL: 30
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  WorkerDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Sub '${EnvironmentName}-worker'
+      NamespaceId: !Ref PrivateDnsNamespaceId
+      DnsConfig:
+        RoutingPolicy: WEIGHTED
+        DnsRecords:
+          - Type: A
+            TTL: 30
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  NotificationDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Sub '${EnvironmentName}-notification'
+      NamespaceId: !Ref PrivateDnsNamespaceId
+      DnsConfig:
+        RoutingPolicy: WEIGHTED
+        DnsRecords:
+          - Type: A
+            TTL: 30
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  ApiEcsService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ApiDiscoveryService
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-api'
+      Cluster: !Ref ClusterArn
+      TaskDefinition: !Ref ApiTaskDefinitionArn
+      DesiredCount: !Ref ApiDesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref ServiceSubnets
+          SecurityGroups: !Ref ServiceSecurityGroups
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ApiDiscoveryService.Arn
+          ContainerName: !Ref ApiContainerName
+          ContainerPort: !Ref ApiContainerPort
+      PropagateTags: SERVICE
+      EnableECSManagedTags: true
+
+  WorkerEcsService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - WorkerDiscoveryService
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-worker'
+      Cluster: !Ref ClusterArn
+      TaskDefinition: !Ref WorkerTaskDefinitionArn
+      DesiredCount: !Ref WorkerDesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref ServiceSubnets
+          SecurityGroups: !Ref ServiceSecurityGroups
+      ServiceRegistries:
+        - RegistryArn: !GetAtt WorkerDiscoveryService.Arn
+          ContainerName: !Ref WorkerContainerName
+          ContainerPort: !Ref WorkerContainerPort
+      PropagateTags: SERVICE
+      EnableECSManagedTags: true
+
+  NotificationEcsService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - NotificationDiscoveryService
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-notification'
+      Cluster: !Ref ClusterArn
+      TaskDefinition: !Ref NotificationTaskDefinitionArn
+      DesiredCount: !Ref NotificationDesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref ServiceSubnets
+          SecurityGroups: !Ref ServiceSecurityGroups
+      ServiceRegistries:
+        - RegistryArn: !GetAtt NotificationDiscoveryService.Arn
+          ContainerName: !Ref NotificationContainerName
+          ContainerPort: !Ref NotificationContainerPort
+      PropagateTags: SERVICE
+      EnableECSManagedTags: true
+
+Outputs:
+  ApiServiceArn:
+    Description: ECS service ARN for API.
+    Value: !Ref ApiEcsService
+
+  WorkerServiceArn:
+    Description: ECS service ARN for worker.
+    Value: !Ref WorkerEcsService
+
+  NotificationServiceArn:
+    Description: ECS service ARN for notification.
+    Value: !Ref NotificationEcsService
+
+  ApiDiscoveryName:
+    Description: API service-discovery DNS entry.
+    Value: !Sub '${EnvironmentName}-api.${PrivateDnsNamespaceName}'
+
+  WorkerDiscoveryName:
+    Description: Worker service-discovery DNS entry.
+    Value: !Sub '${EnvironmentName}-worker.${PrivateDnsNamespaceName}'
+
+  NotificationDiscoveryName:
+    Description: Notification service-discovery DNS entry.
+    Value: !Sub '${EnvironmentName}-notification.${PrivateDnsNamespaceName}'
