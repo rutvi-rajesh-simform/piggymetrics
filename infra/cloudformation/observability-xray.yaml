@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Enable AWS X-Ray sampling, tracing groups, and IAM permissions for compute services.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name prefix for X-Ray resources.
+
+  LambdaExecutionRoleName:
+    Type: String
+    Default: ''
+    Description: Existing IAM role name used by Lambda functions (leave empty to skip).
+
+  EcsTaskRoleName:
+    Type: String
+    Default: ''
+    Description: Existing IAM role name used by ECS tasks (leave empty to skip).
+
+  Ec2InstanceRoleName:
+    Type: String
+    Default: ''
+    Description: Existing IAM role name used by EC2-backed services (leave empty to skip).
+
+  ApiGatewayRestApiId:
+    Type: String
+    Default: ''
+    Description: Existing API Gateway REST API ID to enable stage tracing (leave empty to skip).
+
+  ApiGatewayDeploymentId:
+    Type: String
+    Default: ''
+    Description: Deployment ID for the API Gateway stage (required only when enabling stage tracing).
+
+  ApiGatewayStageName:
+    Type: String
+    Default: prod
+    Description: Stage name for API Gateway tracing.
+
+  FixedRateSampling:
+    Type: Number
+    Default: 0.10
+    MinValue: 0
+    MaxValue: 1
+    Description: Fixed target sampling rate for X-Ray traces.
+
+  ReservoirSize:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: Reserved requests per second per host sampled before fixed rate.
+
+Conditions:
+  HasLambdaRole: !Not [!Equals [!Ref LambdaExecutionRoleName, '']]
+  HasEcsTaskRole: !Not [!Equals [!Ref EcsTaskRoleName, '']]
+  HasEc2Role: !Not [!Equals [!Ref Ec2InstanceRoleName, '']]
+  HasApiGatewayRestApiId: !Not [!Equals [!Ref ApiGatewayRestApiId, '']]
+  HasApiGatewayDeploymentId: !Not [!Equals [!Ref ApiGatewayDeploymentId, '']]
+  EnableApiGatewayStageTracing: !And
+    - !Condition HasApiGatewayRestApiId
+    - !Condition HasApiGatewayDeploymentId
+
+Resources:
+  XRayDefaultSamplingRule:
+    Type: AWS::XRay::SamplingRule
+    Properties:
+      SamplingRule:
+        RuleName: !Sub '${EnvironmentName}-default-sampling-rule'
+        Priority: 10000
+        Version: 1
+        ReservoirSize: !Ref ReservoirSize
+        FixedRate: !Ref FixedRateSampling
+        Host: '*'
+        HTTPMethod: '*'
+        URLPath: '*'
+        ResourceARN: '*'
+        ServiceName: '*'
+        ServiceType: '*'
+
+  XRayErrorHotspotGroup:
+    Type: AWS::XRay::Group
+    Properties:
+      GroupName: !Sub '${EnvironmentName}-error-hotspots'
+      FilterExpression: "service(\"*\") { fault = true OR error = true OR throttle = true }"
+      InsightsConfiguration:
+        InsightsEnabled: true
+        NotificationsEnabled: false
+
+  LambdaXRayPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasLambdaRole
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-lambda-xray-write'
+      Roles:
+        - !Ref LambdaExecutionRoleName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: XRayWrite
+            Effect: Allow
+            Action:
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+            Resource: '*'
+          - Sid: XRaySamplingRead
+            Effect: Allow
+            Action:
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+              - xray:GetSamplingStatisticSummaries
+            Resource: '*'
+
+  ECSTaskXRayPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasEcsTaskRole
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-ecs-task-xray-write'
+      Roles:
+        - !Ref EcsTaskRoleName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: XRayWrite
+            Effect: Allow
+            Action:
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+            Resource: '*'
+          - Sid: XRaySamplingRead
+            Effect: Allow
+            Action:
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+              - xray:GetSamplingStatisticSummaries
+            Resource: '*'
+
+  EC2InstanceXRayPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasEc2Role
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-ec2-xray-write'
+      Roles:
+        - !Ref Ec2InstanceRoleName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: XRayWrite
+            Effect: Allow
+            Action:
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+            Resource: '*'
+          - Sid: XRaySamplingRead
+            Effect: Allow
+            Action:
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+              - xray:GetSamplingStatisticSummaries
+            Resource: '*'
+
+  ApiGatewayTracingStage:
+    Type: AWS::ApiGateway::Stage
+    Condition: EnableApiGatewayStageTracing
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiId
+      DeploymentId: !Ref ApiGatewayDeploymentId
+      StageName: !Ref ApiGatewayStageName
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: false
+          LoggingLevel: INFO
+
+Outputs:
+  XRaySamplingRuleArn:
+    Description: ARN of the default X-Ray sampling rule.
+    Value: !GetAtt XRayDefaultSamplingRule.SamplingRuleARN
+
+  XRayErrorHotspotGroupArn:
+    Description: ARN of the X-Ray group used for error hotspot detection.
+    Value: !GetAtt XRayErrorHotspotGroup.GroupARN
+
+  ApiGatewayTracingStageName:
+    Condition: EnableApiGatewayStageTracing
+    Description: API Gateway stage with X-Ray tracing enabled.
+    Value: !Ref ApiGatewayTracingStage
