@@ -1,11 +1,21 @@
 spring:
+  config:
+    import: aws-secretsmanager:/piggymetrics/auth-service
+  cloud:
+    discovery:
+      enabled: false
   data:
     mongodb:
-      host: auth-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+      uri: ${AUTH_MONGODB_URI:mongodb://${AUTH_MONGODB_USERNAME:user}:${AUTH_MONGODB_PASSWORD}@${AUTH_MONGODB_HOST:auth-docdb.cluster.local}:27017/piggymetrics?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false}
+      database: ${AUTH_MONGODB_DATABASE:piggymetrics}
+      ssl:
+        enabled: true
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
 
 server:
   servlet:
