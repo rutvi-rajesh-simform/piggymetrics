@@ -1,0 +1,269 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon DocumentDB cluster, instances, subnet group, parameter group, and connection outputs.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    Description: Environment or stage name used for resource naming.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where DocumentDB resources are deployed.
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnet IDs (at least two across AZs) for the DocumentDB subnet group.
+
+  AppClientSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID of application clients allowed to connect to DocumentDB on port 27017.
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.medium
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r6g.large
+      - db.r6g.xlarge
+    Description: DocumentDB instance class.
+
+  EngineVersion:
+    Type: String
+    Default: '5.0.0'
+    AllowedValues:
+      - '4.0.0'
+      - '5.0.0'
+    Description: DocumentDB engine version.
+
+  InstanceCount:
+    Type: String
+    Default: '2'
+    AllowedValues:
+      - '1'
+      - '2'
+      - '3'
+    Description: Number of DocumentDB instances to create.
+
+  DeletionProtection:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable deletion protection on the DocumentDB cluster.
+
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 35
+    Description: Number of days to retain backups.
+
+  PreferredBackupWindow:
+    Type: String
+    Default: 03:00-04:00
+    Description: Daily backup window in UTC.
+
+  PreferredMaintenanceWindow:
+    Type: String
+    Default: sun:04:00-sun:05:00
+    Description: Weekly maintenance window in UTC.
+
+  DatabaseName:
+    Type: String
+    Default: appdb
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
+    Description: Initial database name.
+
+Resources:
+  DocumentDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${EnvironmentName} DocumentDB access security group'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref AppClientSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-sg'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentName}-docdb-subnet-group'
+      DBSubnetGroupDescription: !Sub '${EnvironmentName} DocumentDB subnet group'
+      SubnetIds: !Ref PrivateSubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-subnet-group'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBClusterParameterGroup:
+    Type: AWS::DocDB::DBClusterParameterGroup
+    Properties:
+      Description: !Sub '${EnvironmentName} DocumentDB cluster parameter group'
+      Family: docdb5.0
+      Parameters:
+        tls: enabled
+        audit_logs: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-cluster-pg'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocDBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/documentdb/master'
+      Description: !Sub 'Master credentials for ${EnvironmentName} DocumentDB cluster'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"docdbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-master-secret'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBCluster:
+    Type: AWS::DocDB::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Sub '${EnvironmentName}-docdb-cluster'
+      EngineVersion: !Ref EngineVersion
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DocDBMasterSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DocDBMasterSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DocumentDBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DocumentDBSecurityGroup
+      DBClusterParameterGroupName: !Ref DocumentDBClusterParameterGroup
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      Port: 27017
+      StorageEncrypted: true
+      DeletionProtection: !Equals [!Ref DeletionProtection, 'true']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-cluster'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBInstance1:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-docdb-instance-1'
+      AutoMinorVersionUpgrade: true
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-instance-1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBInstance2:
+    Type: AWS::DocDB::DBInstance
+    Condition: CreateInstance2
+    Properties:
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-docdb-instance-2'
+      AutoMinorVersionUpgrade: true
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-instance-2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DocumentDBInstance3:
+    Type: AWS::DocDB::DBInstance
+    Condition: CreateInstance3
+    Properties:
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-docdb-instance-3'
+      AutoMinorVersionUpgrade: true
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-docdb-instance-3'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Conditions:
+  CreateInstance2: !Or
+    - !Equals [!Ref InstanceCount, '2']
+    - !Equals [!Ref InstanceCount, '3']
+  CreateInstance3: !Equals [!Ref InstanceCount, '3']
+
+Outputs:
+  DocumentDBClusterArn:
+    Description: ARN of the DocumentDB cluster.
+    Value: !GetAtt DocumentDBCluster.DBClusterArn
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBClusterArn'
+
+  DocumentDBClusterIdentifier:
+    Description: Cluster identifier used by service consumers.
+    Value: !Ref DocumentDBCluster
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBClusterIdentifier'
+
+  DocumentDBEndpoint:
+    Description: Writer endpoint for DocumentDB connections.
+    Value: !GetAtt DocumentDBCluster.Endpoint
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBEndpoint'
+
+  DocumentDBReaderEndpoint:
+    Description: Reader endpoint for read-scaling consumers.
+    Value: !GetAtt DocumentDBCluster.ReadEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBReaderEndpoint'
+
+  DocumentDBPort:
+    Description: DocumentDB connection port.
+    Value: !GetAtt DocumentDBCluster.Port
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBPort'
+
+  DocumentDBDatabaseName:
+    Description: Logical database name expected by application services.
+    Value: !Ref DatabaseName
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBDatabaseName'
+
+  DocumentDBMasterSecretArn:
+    Description: Secrets Manager ARN containing DocumentDB master credentials.
+    Value: !Ref DocDBMasterSecret
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBMasterSecretArn'
+
+  DocumentDBConnectionStringTemplate:
+    Description: Connection string template (credentials resolved from Secrets Manager).
+    Value: !Sub 'mongodb://<username>:<password>@${DocumentDBCluster.Endpoint}:${DocumentDBCluster.Port}/${DatabaseName}?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false'
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBConnectionStringTemplate'
+
+  DocumentDBSecurityGroupId:
+    Description: Security group ID attached to the DocumentDB cluster.
+    Value: !Ref DocumentDBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}:DocumentDBSecurityGroupId'
