@@ -3,7 +3,7 @@ security:
     client:
       clientId: notification-service
       clientSecret: ${NOTIFICATION_SERVICE_PASSWORD}
-      accessTokenUri: http://auth-service:5000/uaa/oauth/token
+      accessTokenUri: ${AUTH_SERVICE_OAUTH_TOKEN_URI:http://localhost:5000/uaa/oauth/token}
       grant-type: client_credentials
       scope: server
 
@@ -26,18 +26,24 @@ backup:
     attachment: backup.json
 
 spring:
+  config:
+    import: "optional:aws-secretsmanager:/notification-service"
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      secretsmanager:
+        enabled: true
+        fail-fast: true
   data:
     mongodb:
-      host: notification-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+      uri: ${DOCDB_URI:mongodb://user:${MONGODB_PASSWORD}@notification-docdb.cluster.local:27017/piggymetrics?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false}
+      database: ${DOCDB_DATABASE:piggymetrics}
   mail:
     host: smtp.gmail.com
     port: 465
-    username: dev-user
-    password: dev-password
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
     properties:
       mail:
         smtp:
