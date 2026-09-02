@@ -11,17 +11,43 @@ hystrix:
             timeoutInMilliseconds: 10000
 
 eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
   instance:
     prefer-ip-address: true
-  client:
-    serviceUrl:
-      defaultZone: http://registry:8761/eureka/
+
+shared:
+  module-composition:
+    service-discovery:
+      primary: cloud-map
+      secondary: eureka
+      eureka-enabled: false
+  dependency-management:
+    aws-sdk-v2-bom: software.amazon.awssdk:bom:2.25.45
+    spring-cloud-aws-bom: io.awspring.cloud:spring-cloud-aws-dependencies:3.1.1
+    spring-cloud-aws-secrets-manager: io.awspring.cloud:spring-cloud-aws-starter-secrets-manager-config
 
 security:
   oauth2:
     resource:
-      user-info-uri: http://auth-service:5000/uaa/users/current
+      user-info-uri: ${AUTH_USER_INFO_URI:http://auth-service.${CLOUD_MAP_NAMESPACE:local}:5000/uaa/users/current}
 
 spring:
+  config:
+    import: optional:aws-secretsmanager:/
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      secretsmanager:
+        enabled: true
   rabbitmq:
-    host: rabbitmq
+    host: ${RABBITMQ_HOST:rabbitmq}
+
+services:
+  auth:
+    base-url: ${AUTH_SERVICE_URL:http://auth-service.${CLOUD_MAP_NAMESPACE:local}:5000}
+  registry:
+    base-url: ${REGISTRY_URL:http://registry:8761}
