@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS WAFv2 Web ACL for API Gateway stage with bot filtering, OWASP protections, and IP-based rate limiting.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: piggymetrics
+    Description: Project/application name used for naming and tagging.
+
+  EnvironmentName:
+    Type: String
+    Default: prod
+    Description: Deployment environment name.
+
+  ApiGatewayRestApiId:
+    Type: String
+    Description: REST API ID of the API Gateway to protect (for example a1b2c3d4e5).
+
+  ApiGatewayStageName:
+    Type: String
+    Default: prod
+    Description: API Gateway stage name to associate with this Web ACL.
+
+  RateLimitPer5Min:
+    Type: Number
+    Default: 2000
+    MinValue: 100
+    Description: Maximum requests per 5-minute period from a single source IP before blocking.
+
+Resources:
+  ApiWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-api-webacl'
+      Description: !Sub 'Web ACL for ${ProjectName} ${EnvironmentName} API Gateway stage'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}-${EnvironmentName}-webacl'
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${EnvironmentName}-common-rules'
+            SampledRequestsEnabled: true
+
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${EnvironmentName}-known-bad-inputs'
+            SampledRequestsEnabled: true
+
+        - Name: AWSManagedRulesBotControlRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+              ManagedRuleGroupConfigs:
+                - AWSManagedRulesBotControlRuleSet:
+                    InspectionLevel: COMMON
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${EnvironmentName}-bot-control'
+            SampledRequestsEnabled: true
+
+        - Name: IpRateLimitRule
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: !Ref RateLimitPer5Min
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${EnvironmentName}-ip-rate-limit'
+            SampledRequestsEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ApiGatewayWebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayRestApiId}/stages/${ApiGatewayStageName}'
+      WebACLArn: !GetAtt ApiWebAcl.Arn
+
+Outputs:
+  WebAclArn:
+    Description: ARN of the created WAF Web ACL.
+    Value: !GetAtt ApiWebAcl.Arn
+
+  WebAclId:
+    Description: ID of the created WAF Web ACL.
+    Value: !GetAtt ApiWebAcl.Id
+
+  AssociatedApiGatewayStageArn:
+    Description: ARN of the API Gateway stage associated with the Web ACL.
+    Value: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayRestApiId}/stages/${ApiGatewayStageName}'
