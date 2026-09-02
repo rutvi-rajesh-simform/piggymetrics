@@ -3,18 +3,26 @@ security:
     client:
       clientId: account-service
       clientSecret: ${ACCOUNT_SERVICE_PASSWORD}
-      accessTokenUri: http://auth-service:5000/uaa/oauth/token
+      accessTokenUri: ${AUTH_SERVICE_TOKEN_URI:http://localhost:5000/uaa/oauth/token}
       grant-type: client_credentials
       scope: server
 
 spring:
+  config:
+    import: "optional:aws-secretsmanager:/piggymetrics/account-service"
+  cloud:
+    discovery:
+      enabled: false
   data:
     mongodb:
-      host: account-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+      uri: ${ACCOUNT_DOCUMENTDB_URI:mongodb://${DOCDB_USERNAME:user}:${DOCDB_PASSWORD}@${DOCDB_HOST:localhost}:${DOCDB_PORT:27017}/${DOCDB_DATABASE:piggymetrics}?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false}
+      database: ${DOCDB_DATABASE:piggymetrics}
+      ssl:
+        enabled: true
+
+eureka:
+  client:
+    enabled: false
 
 server:
   servlet:
