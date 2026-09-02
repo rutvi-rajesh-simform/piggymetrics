@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon MQ for RabbitMQ broker with application users and Spring AMQP-friendly outputs.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: app
+    Description: Logical project name used in resource naming.
+
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Deployment environment (for example dev, stage, prod).
+
+  BrokerName:
+    Type: String
+    Default: rabbitmq-broker
+    Description: Amazon MQ broker name.
+
+  DeploymentMode:
+    Type: String
+    Default: SINGLE_INSTANCE
+    AllowedValues:
+      - SINGLE_INSTANCE
+      - CLUSTER_MULTI_AZ
+    Description: SINGLE_INSTANCE for lower cost, CLUSTER_MULTI_AZ for HA.
+
+  HostInstanceType:
+    Type: String
+    Default: mq.t3.micro
+    Description: Broker instance type.
+
+  EngineVersion:
+    Type: String
+    Default: '3.13'
+    Description: RabbitMQ engine version supported in your AWS Region.
+
+  PubliclyAccessible:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether broker endpoints are publicly accessible.
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for broker deployment. Use private subnets for production.
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group allowing AMQPS ingress (typically 5671) from application workloads.
+
+  AdminUsername:
+    Type: String
+    Default: admin
+    AllowedPattern: '^[A-Za-z0-9_-]+$'
+    Description: Admin username for broker management.
+
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    MaxLength: 250
+    Description: Admin password for broker management.
+
+  AppUsername:
+    Type: String
+    Default: app
+    AllowedPattern: '^[A-Za-z0-9_-]+$'
+    Description: Application user for Spring AMQP clients.
+
+  AppPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    MaxLength: 250
+    Description: Application user password for Spring AMQP clients.
+
+Resources:
+  RabbitMqBroker:
+    Type: AWS::AmazonMQ::Broker
+    Properties:
+      BrokerName: !Sub '${ProjectName}-${EnvironmentName}-${BrokerName}'
+      EngineType: RABBITMQ
+      EngineVersion: !Ref EngineVersion
+      HostInstanceType: !Ref HostInstanceType
+      DeploymentMode: !Ref DeploymentMode
+      PubliclyAccessible: !Equals [!Ref PubliclyAccessible, 'true']
+      AutoMinorVersionUpgrade: true
+      SubnetIds: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref SecurityGroupId
+      Users:
+        - Username: !Ref AdminUsername
+          Password: !Ref AdminPassword
+        - Username: !Ref AppUsername
+          Password: !Ref AppPassword
+      Logs:
+        General: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-rabbitmq'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  RabbitMqBrokerId:
+    Description: Amazon MQ broker ID.
+    Value: !Ref RabbitMqBroker
+
+  RabbitMqBrokerArn:
+    Description: Amazon MQ broker ARN.
+    Value: !GetAtt RabbitMqBroker.Arn
+
+  RabbitMqPrimaryAmqpsEndpoint:
+    Description: Primary AMQPS endpoint URI for RabbitMQ clients.
+    Value: !Select [0, !GetAtt RabbitMqBroker.AmqpEndpoints]
+
+  RabbitMqAllAmqpsEndpoints:
+    Description: Comma-separated AMQPS endpoints (use for cluster-aware clients).
+    Value: !Join [',', !GetAtt RabbitMqBroker.AmqpEndpoints]
+
+  SpringRabbitMqAddresses:
+    Description: Value for spring.rabbitmq.addresses.
+    Value: !Join [',', !GetAtt RabbitMqBroker.AmqpEndpoints]
+
+  SpringRabbitMqUsername:
+    Description: Value for spring.rabbitmq.username.
+    Value: !Ref AppUsername
+
+  SpringRabbitMqSslEnabled:
+    Description: Value for spring.rabbitmq.ssl.enabled.
+    Value: 'true'
