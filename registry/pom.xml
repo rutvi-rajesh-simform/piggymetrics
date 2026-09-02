@@ -1,46 +1,99 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<artifactId>registry</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<packaging>jar</packaging>
+    <artifactId>registry</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
-	<name>registry</name>
+    <name>registry</name>
 
-	<parent>
-		<groupId>com.piggymetrics</groupId>
-		<artifactId>piggymetrics</artifactId>
-		<version>1.0-SNAPSHOT</version>
-	</parent>
+    <parent>
+        <groupId>com.piggymetrics</groupId>
+        <artifactId>piggymetrics</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
 
-	<dependencies>
+    <properties>
+        <aws.sdk.version>2.25.53</aws.sdk.version>
+        <spring-cloud-aws.version>3.1.1</spring-cloud-aws.version>
+
+        <!-- Cloud Map-friendly service URL conventions (consumed by app config placeholders) -->
+        <service.url.scheme>http</service.url.scheme>
+        <service.url.template>${service.url.scheme}://%s</service.url.template>
+        <service.discovery.provider>cloud-map</service.discovery.provider>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.awspring.cloud</groupId>
+                <artifactId>spring-cloud-aws-dependencies</artifactId>
+                <version>${spring-cloud-aws.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Registry keeps config support, while service discovery shifts toward Cloud Map -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+            <artifactId>spring-cloud-starter-config</artifactId>
         </dependency>
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-config</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
-	
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<finalName>${project.name}</finalName>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
-	
+
+        <!-- Spring Cloud AWS Secrets Manager integration -->
+        <dependency>
+            <groupId>io.awspring.cloud</groupId>
+            <artifactId>spring-cloud-aws-starter-secrets-manager</artifactId>
+        </dependency>
+
+        <!-- AWS SDK v2 client for Cloud Map service discovery integration -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>servicediscovery</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!-- Optional legacy profile to keep Eureka available when explicitly needed -->
+        <profile>
+            <id>legacy-eureka</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.springframework.cloud</groupId>
+                    <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <finalName>${project.name}</finalName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
