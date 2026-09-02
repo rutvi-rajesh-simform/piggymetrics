@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'PiggyMetrics - Amazon ElastiCache for Redis cache layer for account/statistics hot reads and temporary token/session caching'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Network'
+        Parameters:
+          - VpcId
+          - PrivateSubnetIds
+      - Label:
+          default: 'Service Security Group Bindings'
+        Parameters:
+          - AccountServiceSecurityGroupId
+          - StatisticsServiceSecurityGroupId
+          - AuthServiceSecurityGroupId
+          - GatewaySecurityGroupId
+      - Label:
+          default: 'Redis Configuration'
+        Parameters:
+          - EnvironmentName
+          - RedisNodeType
+          - RedisEngineVersion
+          - RedisPort
+          - ReplicasPerNodeGroup
+          - SnapshotRetentionLimit
+          - PreferredMaintenanceWindow
+          - RedisAuthToken
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: 'Environment name used for resource naming and tags (e.g. dev, staging, prod).'
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'VPC where ElastiCache Redis should be deployed.'
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Private subnet IDs (in at least 2 AZs) for ElastiCache subnet group.'
+
+  AccountServiceSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: 'Optional SG ID used by account-service compute tasks/instances. If provided, ingress to Redis is granted.'
+
+  StatisticsServiceSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: 'Optional SG ID used by statistics-service compute tasks/instances. If provided, ingress to Redis is granted.'
+
+  AuthServiceSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: 'Optional SG ID used by auth-service compute tasks/instances. If provided, ingress to Redis is granted.'
+
+  GatewaySecurityGroupId:
+    Type: String
+    Default: ''
+    Description: 'Optional SG ID used by gateway compute tasks/instances. If provided, ingress to Redis is granted.'
+
+  RedisNodeType:
+    Type: String
+    Default: cache.t4g.small
+    AllowedPattern: '^cache\\..+'
+    Description: 'ElastiCache node type (e.g. cache.t4g.small, cache.r7g.large).'
+
+  RedisEngineVersion:
+    Type: String
+    Default: '7.1'
+    Description: 'Redis OSS engine version for ElastiCache replication group.'
+
+  RedisPort:
+    Type: Number
+    Default: 6379
+    MinValue: 1024
+    MaxValue: 65535
+    Description: 'Redis port exposed by the replication group.'
+
+  ReplicasPerNodeGroup:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 5
+    Description: 'Number of read replicas per shard. For HA, keep at least 1.'
+
+  SnapshotRetentionLimit:
+    Type: Number
+    Default: 7
+    MinValue: 0
+    MaxValue: 35
+    Description: 'Number of days to retain automatic snapshots (0 disables snapshots).'
+
+  PreferredMaintenanceWindow:
+    Type: String
+    Default: sun:05:00-sun:06:00
+    Description: 'UTC weekly maintenance window in ddd:hh24:mi-ddd:hh24:mi format.'
+
+  RedisAuthToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    MinLength: 0
+    MaxLength: 128
+    Description: 'Optional Redis AUTH token. Leave empty to disable token auth. If set, use a strong token and rotate via Secrets Manager.'
+
+Conditions:
+  HasAccountServiceSG: !Not [!Equals [!Ref AccountServiceSecurityGroupId, '']]
+  HasStatisticsServiceSG: !Not [!Equals [!Ref StatisticsServiceSecurityGroupId, '']]
+  HasAuthServiceSG: !Not [!Equals [!Ref AuthServiceSecurityGroupId, '']]
+  HasGatewaySG: !Not [!Equals [!Ref GatewaySecurityGroupId, '']]
+  UseAuthToken: !Not [!Equals [!Ref RedisAuthToken, '']]
+
+Resources:
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Redis access control for ${EnvironmentName} services'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-piggymetrics-redis-sg'
+        - Key: Project
+          Value: piggymetrics
+        - Key: Component
+          Value: cache
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  RedisIngressFromAccountService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasAccountServiceSG
+    Properties:
+      GroupId: !Ref RedisSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref RedisPort
+      ToPort: !Ref RedisPort
+      SourceSecurityGroupId: !Ref AccountServiceSecurityGroupId
+      Description: 'Allow account-service access to Redis'
+
+  RedisIngressFromStatisticsService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasStatisticsServiceSG
+    Properties:
+      GroupId: !Ref RedisSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref RedisPort
+      ToPort: !Ref RedisPort
+      SourceSecurityGroupId: !Ref StatisticsServiceSecurityGroupId
+      Description: 'Allow statistics-service access to Redis'
+
+  RedisIngressFromAuthService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasAuthServiceSG
+    Properties:
+      GroupId: !Ref RedisSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref RedisPort
+      ToPort: !Ref RedisPort
+      SourceSecurityGroupId: !Ref AuthServiceSecurityGroupId
+      Description: 'Allow auth-service access to Redis'
+
+  RedisIngressFromGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasGatewaySG
+    Properties:
+      GroupId: !Ref RedisSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref RedisPort
+      ToPort: !Ref RedisPort
+      SourceSecurityGroupId: !Ref GatewaySecurityGroupId
+      Description: 'Allow gateway access to Redis'
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub 'Private subnet group for ${EnvironmentName} ElastiCache Redis'
+      SubnetIds: !Ref PrivateSubnetIds
+      CacheSubnetGroupName: !Sub '${EnvironmentName}-piggymetrics-redis-subnets'
+
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Sub '${EnvironmentName}-piggymetrics-redis'
+      ReplicationGroupDescription: !Sub 'Redis cache for PiggyMetrics (${EnvironmentName}) hot reads and temporary token/session cache'
+      Engine: redis
+      EngineVersion: !Ref RedisEngineVersion
+      CacheNodeType: !Ref RedisNodeType
+      Port: !Ref RedisPort
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      AutomaticFailoverEnabled: true
+      MultiAZEnabled: true
+      NumNodeGroups: 1
+      ReplicasPerNodeGroup: !Ref ReplicasPerNodeGroup
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      AuthToken: !If [UseAuthToken, !Ref RedisAuthToken, !Ref AWS::NoValue]
+      AutoMinorVersionUpgrade: true
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      SnapshotRetentionLimit: !Ref SnapshotRetentionLimit
+      SnapshotWindow: '03:00-04:00'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-piggymetrics-redis'
+        - Key: Project
+          Value: piggymetrics
+        - Key: Component
+          Value: cache
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  RedisReplicationGroupId:
+    Description: 'ElastiCache replication group ID.'
+    Value: !Ref RedisReplicationGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisReplicationGroupId'
+
+  RedisPrimaryEndpointAddress:
+    Description: 'Primary endpoint address for write operations.'
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisPrimaryEndpointAddress'
+
+  RedisReaderEndpointAddress:
+    Description: 'Reader endpoint address for read-scaled operations.'
+    Value: !GetAtt RedisReplicationGroup.ReaderEndPoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisReaderEndpointAddress'
+
+  RedisPort:
+    Description: 'Redis endpoint port.'
+    Value: !Ref RedisPort
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisPort'
+
+  RedisSecurityGroupId:
+    Description: 'Security group attached to Redis replication group.'
+    Value: !Ref RedisSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisSecurityGroupId'
