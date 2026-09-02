@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cloud Map private DNS namespace and service discovery registrations for microservices
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the private DNS namespace will be created
+
+  NamespaceName:
+    Type: String
+    Default: internal.local
+    Description: Private DNS namespace name
+
+  NamespaceDescription:
+    Type: String
+    Default: Private service discovery namespace for microservices
+
+  ApiServiceName:
+    Type: String
+    Default: api
+  ApiServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for API service registration
+  ApiServicePort:
+    Type: Number
+    Default: 8080
+
+  DocumentDbServiceName:
+    Type: String
+    Default: documentdb
+  DocumentDbServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for DocumentDB-facing microservice registration
+  DocumentDbServicePort:
+    Type: Number
+    Default: 27017
+
+  SesServiceName:
+    Type: String
+    Default: ses
+  SesServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for SES-facing microservice registration
+  SesServicePort:
+    Type: Number
+    Default: 8081
+
+  RabbitMqServiceName:
+    Type: String
+    Default: rabbitmq
+  RabbitMqServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for RabbitMQ-facing microservice registration
+  RabbitMqServicePort:
+    Type: Number
+    Default: 5672
+
+  SecretsServiceName:
+    Type: String
+    Default: secrets
+  SecretsServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for Secrets Manager-facing microservice registration
+  SecretsServicePort:
+    Type: Number
+    Default: 8082
+
+  CloudMapServiceName:
+    Type: String
+    Default: cloudmap
+  CloudMapServiceIp:
+    Type: String
+    Default: ''
+    Description: Optional IPv4 address for Cloud Map helper microservice registration
+  CloudMapServicePort:
+    Type: Number
+    Default: 8083
+
+Conditions:
+  HasApiServiceIp: !Not [!Equals [!Ref ApiServiceIp, '']]
+  HasDocumentDbServiceIp: !Not [!Equals [!Ref DocumentDbServiceIp, '']]
+  HasSesServiceIp: !Not [!Equals [!Ref SesServiceIp, '']]
+  HasRabbitMqServiceIp: !Not [!Equals [!Ref RabbitMqServiceIp, '']]
+  HasSecretsServiceIp: !Not [!Equals [!Ref SecretsServiceIp, '']]
+  HasCloudMapServiceIp: !Not [!Equals [!Ref CloudMapServiceIp, '']]
+
+Resources:
+  PrivateDnsNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Ref NamespaceName
+      Description: !Ref NamespaceDescription
+      Vpc: !Ref VpcId
+
+  ApiServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref ApiServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  DocumentDbServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref DocumentDbServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  SesServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref SesServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  RabbitMqServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref RabbitMqServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  SecretsServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref SecretsServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  CloudMapServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref CloudMapServiceName
+      NamespaceId: !Ref PrivateDnsNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  ApiServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasApiServiceIp
+    Properties:
+      ServiceId: !Ref ApiServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref ApiServiceIp
+        AWS_INSTANCE_PORT: !Sub '${ApiServicePort}'
+      InstanceId: !Sub '${ApiServiceName}-instance-1'
+
+  DocumentDbServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasDocumentDbServiceIp
+    Properties:
+      ServiceId: !Ref DocumentDbServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref DocumentDbServiceIp
+        AWS_INSTANCE_PORT: !Sub '${DocumentDbServicePort}'
+      InstanceId: !Sub '${DocumentDbServiceName}-instance-1'
+
+  SesServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasSesServiceIp
+    Properties:
+      ServiceId: !Ref SesServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref SesServiceIp
+        AWS_INSTANCE_PORT: !Sub '${SesServicePort}'
+      InstanceId: !Sub '${SesServiceName}-instance-1'
+
+  RabbitMqServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasRabbitMqServiceIp
+    Properties:
+      ServiceId: !Ref RabbitMqServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref RabbitMqServiceIp
+        AWS_INSTANCE_PORT: !Sub '${RabbitMqServicePort}'
+      InstanceId: !Sub '${RabbitMqServiceName}-instance-1'
+
+  SecretsServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasSecretsServiceIp
+    Properties:
+      ServiceId: !Ref SecretsServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref SecretsServiceIp
+        AWS_INSTANCE_PORT: !Sub '${SecretsServicePort}'
+      InstanceId: !Sub '${SecretsServiceName}-instance-1'
+
+  CloudMapServiceInstance:
+    Type: AWS::ServiceDiscovery::Instance
+    Condition: HasCloudMapServiceIp
+    Properties:
+      ServiceId: !Ref CloudMapServiceDiscoveryService
+      InstanceAttributes:
+        AWS_INSTANCE_IPV4: !Ref CloudMapServiceIp
+        AWS_INSTANCE_PORT: !Sub '${CloudMapServicePort}'
+      InstanceId: !Sub '${CloudMapServiceName}-instance-1'
+
+Outputs:
+  NamespaceId:
+    Description: Cloud Map private DNS namespace ID
+    Value: !Ref PrivateDnsNamespace
+
+  NamespaceArn:
+    Description: Cloud Map private DNS namespace ARN
+    Value: !GetAtt PrivateDnsNamespace.Arn
+
+  NamespaceNameOutput:
+    Description: Cloud Map private DNS namespace name
+    Value: !Ref NamespaceName
+
+  ApiServiceId:
+    Description: Service discovery service ID for API microservice
+    Value: !Ref ApiServiceDiscoveryService
+
+  DocumentDbServiceId:
+    Description: Service discovery service ID for DocumentDB-facing microservice
+    Value: !Ref DocumentDbServiceDiscoveryService
+
+  SesServiceId:
+    Description: Service discovery service ID for SES-facing microservice
+    Value: !Ref SesServiceDiscoveryService
+
+  RabbitMqServiceId:
+    Description: Service discovery service ID for RabbitMQ-facing microservice
+    Value: !Ref RabbitMqServiceDiscoveryService
+
+  SecretsServiceId:
+    Description: Service discovery service ID for Secrets-facing microservice
+    Value: !Ref SecretsServiceDiscoveryService
+
+  CloudMapServiceId:
+    Description: Service discovery service ID for Cloud Map helper microservice
+    Value: !Ref CloudMapServiceDiscoveryService
