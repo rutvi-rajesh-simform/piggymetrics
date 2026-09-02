@@ -1,2 +1,28 @@
 server:
   port: 8761
+
+shared:
+  module-composition:
+    primary-discovery: cloud-map
+    secondary-discovery: eureka
+    eureka:
+      enabled: false
+      role: legacy-fallback-only
+
+  dependency-management:
+    bom:
+      aws-sdk-v2: software.amazon.awssdk:bom:2.25.53
+      spring-cloud-aws: io.awspring.cloud:spring-cloud-aws-dependencies:3.1.1
+    libraries:
+      - software.amazon.awssdk:servicediscovery
+      - io.awspring.cloud:spring-cloud-aws-starter-secrets-manager
+
+  service-urls:
+    strategy: environment-first
+    defaults:
+      user-service: ${USER_SERVICE_URL:http://user-service.local}
+      order-service: ${ORDER_SERVICE_URL:http://order-service.local}
+      payment-service: ${PAYMENT_SERVICE_URL:http://payment-service.local}
+    cloud-map:
+      namespace: ${CLOUD_MAP_NAMESPACE:local}
+      discovery-endpoint: ${CLOUD_MAP_DISCOVERY_ENDPOINT:http://servicediscovery.local}
