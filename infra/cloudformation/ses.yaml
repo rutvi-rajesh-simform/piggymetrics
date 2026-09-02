@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SES resources for notification workflows (verified domain/email identities, configuration set, and sending authorization policy).
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: notifications
+    Description: Prefix used for named SES resources.
+
+  SesDomainName:
+    Type: String
+    Description: Verified sending domain for SES (for example, example.com).
+
+  SenderEmailAddress:
+    Type: String
+    Description: Verified sender email identity (for example, no-reply@example.com).
+
+  DelegateSenderPrincipalArn:
+    Type: String
+    Description: IAM principal ARN allowed to send using this SES identity (for example, an application role ARN).
+
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Optional Route53 hosted zone ID for automatic DKIM and MAIL FROM DNS record creation.
+
+  SesEventTopicArn:
+    Type: String
+    Default: ''
+    Description: Optional SNS topic ARN for SES sending events from the configuration set.
+
+Conditions:
+  HasHostedZoneId: !Not [!Equals [!Ref HostedZoneId, '']]
+  HasSesEventTopicArn: !Not [!Equals [!Ref SesEventTopicArn, '']]
+
+Resources:
+  SesConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Sub '${ProjectName}-configuration-set'
+      SendingOptions:
+        SendingEnabled: true
+      ReputationOptions:
+        ReputationMetricsEnabled: true
+      SuppressionOptions:
+        SuppressedReasons:
+          - BOUNCE
+          - COMPLAINT
+      VdmOptions:
+        DashboardOptions:
+          EngagementMetrics: ENABLED
+
+  SesConfigurationSetEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Condition: HasSesEventTopicArn
+    Properties:
+      ConfigurationSetName: !Ref SesConfigurationSet
+      EventDestination:
+        Enabled: true
+        MatchingEventTypes:
+          - SEND
+          - REJECT
+          - BOUNCE
+          - COMPLAINT
+          - DELIVERY
+          - OPEN
+          - CLICK
+          - RENDERING_FAILURE
+        SnsDestination:
+          TopicARN: !Ref SesEventTopicArn
+
+  SesDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SesDomainName
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref SesConfigurationSet
+      DkimAttributes:
+        SigningEnabled: true
+      FeedbackAttributes:
+        EmailForwardingEnabled: false
+      MailFromAttributes:
+        BehaviorOnMxFailure: USE_DEFAULT_VALUE
+        MailFromDomain: !Sub 'mail.${SesDomainName}'
+
+  SesSenderEmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SenderEmailAddress
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref SesConfigurationSet
+      FeedbackAttributes:
+        EmailForwardingEnabled: false
+
+  SesSendingAuthorizationPolicy:
+    Type: AWS::SES::IdentityPolicy
+    Properties:
+      Identity: !Ref SesDomainName
+      PolicyName: !Sub '${ProjectName}-ses-sending-policy'
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowNotificationWorkflowSender
+            Effect: Allow
+            Principal:
+              AWS: !Ref DelegateSenderPrincipalArn
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource: !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesDomainName}'
+            Condition:
+              StringEquals:
+                ses:FromDomain: !Ref SesDomainName
+
+  SesDkimRecord1:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZoneId
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesDomainIdentity.DkimDNSTokenName1
+      Type: CNAME
+      TTL: '1800'
+      ResourceRecords:
+        - !GetAtt SesDomainIdentity.DkimDNSTokenValue1
+
+  SesDkimRecord2:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZoneId
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesDomainIdentity.DkimDNSTokenName2
+      Type: CNAME
+      TTL: '1800'
+      ResourceRecords:
+        - !GetAtt SesDomainIdentity.DkimDNSTokenValue2
+
+  SesDkimRecord3:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZoneId
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesDomainIdentity.DkimDNSTokenName3
+      Type: CNAME
+      TTL: '1800'
+      ResourceRecords:
+        - !GetAtt SesDomainIdentity.DkimDNSTokenValue3
+
+  SesMailFromMxRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZoneId
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'mail.${SesDomainName}'
+      Type: MX
+      TTL: '1800'
+      ResourceRecords:
+        - !Sub '10 feedback-smtp.${AWS::Region}.amazonses.com'
+
+  SesMailFromSpfRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZoneId
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'mail.${SesDomainName}'
+      Type: TXT
+      TTL: '1800'
+      ResourceRecords:
+        - '"v=spf1 include:amazonses.com ~all"'
+
+Outputs:
+  ConfigurationSetName:
+    Description: SES configuration set used by notification workflows.
+    Value: !Ref SesConfigurationSet
+
+  DomainIdentity:
+    Description: SES domain identity.
+    Value: !Ref SesDomainName
+
+  SenderEmailIdentity:
+    Description: SES sender email identity.
+    Value: !Ref SenderEmailAddress
+
+  SendingAuthorizationPolicyName:
+    Description: SES sending authorization policy name.
+    Value: !Ref SesSendingAuthorizationPolicy
+
+  DkimTokenName1:
+    Description: DKIM CNAME record name 1.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName1
+
+  DkimTokenValue1:
+    Description: DKIM CNAME record value 1.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue1
+
+  DkimTokenName2:
+    Description: DKIM CNAME record name 2.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName2
+
+  DkimTokenValue2:
+    Description: DKIM CNAME record value 2.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue2
+
+  DkimTokenName3:
+    Description: DKIM CNAME record name 3.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName3
+
+  DkimTokenValue3:
+    Description: DKIM CNAME record value 3.
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue3
