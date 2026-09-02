@@ -10,18 +10,22 @@ hystrix:
           thread:
             timeoutInMilliseconds: 10000
 
-eureka:
-  instance:
-    prefer-ip-address: true
-  client:
-    serviceUrl:
-      defaultZone: http://registry:8761/eureka/
+service-discovery:
+  cloud-map:
+    registry-endpoint: ${SERVICE_REGISTRY_ENDPOINT:http://registry.internal:8761}
+    auth-service-endpoint: ${AUTH_SERVICE_ENDPOINT:http://auth-service.internal:5000}
 
 security:
   oauth2:
     resource:
-      user-info-uri: http://auth-service:5000/uaa/users/current
+      user-info-uri: ${AUTH_SERVICE_ENDPOINT:http://auth-service.internal:5000}/uaa/users/current
 
 spring:
   rabbitmq:
-    host: rabbitmq
+    addresses: ${RABBITMQ_ENDPOINTS:amqps://b-1.example.mq.us-east-1.amazonaws.com:5671}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    ssl:
+      enabled: true
+      algorithm: TLSv1.2

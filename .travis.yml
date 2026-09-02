@@ -18,65 +18,76 @@ after_success:
   - bash <(curl -s https://codecov.io/bash)
   - docker login -u $DOCKER_USER -p $DOCKER_PASS
 
-  #TAG
+  # TAG
   - export TAG=`if [ "$TRAVIS_BRANCH" == "master" ]; then echo "latest"; else echo $TRAVIS_BRANCH ; fi`
+
+  # ECS/CLOUD MAP SERVICE DISCOVERY PARAMETERIZATION
+  - export CLOUDMAP_NAMESPACE=${CLOUDMAP_NAMESPACE:-piggymetrics.local}
+  - export CONFIG_SERVER_URI=${CONFIG_SERVER_URI:-http://config.${CLOUDMAP_NAMESPACE}:8888}
+  - export REGISTRY_HOST=${REGISTRY_HOST:-registry.${CLOUDMAP_NAMESPACE}}
+  - export GATEWAY_HOST=${GATEWAY_HOST:-gateway.${CLOUDMAP_NAMESPACE}}
+  - export AUTH_SERVICE_HOST=${AUTH_SERVICE_HOST:-auth-service.${CLOUDMAP_NAMESPACE}}
+  - export ACCOUNT_SERVICE_HOST=${ACCOUNT_SERVICE_HOST:-account-service.${CLOUDMAP_NAMESPACE}}
+  - export STATISTICS_SERVICE_HOST=${STATISTICS_SERVICE_HOST:-statistics-service.${CLOUDMAP_NAMESPACE}}
+  - export NOTIFICATION_SERVICE_HOST=${NOTIFICATION_SERVICE_HOST:-notification-service.${CLOUDMAP_NAMESPACE}}
+  - export TURBINE_HOST=${TURBINE_HOST:-turbine-stream-service.${CLOUDMAP_NAMESPACE}}
 
   # CONFIG SERVICE
   - export CONFIG=sqshq/piggymetrics-config
-  - docker build -t $CONFIG:$COMMIT ./config
+  - docker build -t $CONFIG:$COMMIT --build-arg CLOUDMAP_NAMESPACE=$CLOUDMAP_NAMESPACE ./config
   - docker tag $CONFIG:$COMMIT $CONFIG:$TAG
   - docker push $CONFIG
 
   # REGISTRY
   - export REGISTRY=sqshq/piggymetrics-registry
-  - docker build -t $REGISTRY:$COMMIT ./registry
+  - docker build -t $REGISTRY:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg CLOUDMAP_NAMESPACE=$CLOUDMAP_NAMESPACE ./registry
   - docker tag $REGISTRY:$COMMIT $REGISTRY:$TAG
   - docker push $REGISTRY
 
   # GATEWAY
   - export GATEWAY=sqshq/piggymetrics-gateway
-  - docker build -t $GATEWAY:$COMMIT ./gateway
+  - docker build -t $GATEWAY:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST --build-arg AUTH_SERVICE_HOST=$AUTH_SERVICE_HOST --build-arg ACCOUNT_SERVICE_HOST=$ACCOUNT_SERVICE_HOST --build-arg STATISTICS_SERVICE_HOST=$STATISTICS_SERVICE_HOST --build-arg NOTIFICATION_SERVICE_HOST=$NOTIFICATION_SERVICE_HOST ./gateway
   - docker tag $GATEWAY:$COMMIT $GATEWAY:$TAG
   - docker push $GATEWAY
 
   # AUTH SERVICE
   - export AUTH_SERVICE=sqshq/piggymetrics-auth-service
-  - docker build -t $AUTH_SERVICE:$COMMIT ./auth-service
+  - docker build -t $AUTH_SERVICE:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST --build-arg ACCOUNT_SERVICE_HOST=$ACCOUNT_SERVICE_HOST ./auth-service
   - docker tag $AUTH_SERVICE:$COMMIT $AUTH_SERVICE:$TAG
   - docker push $AUTH_SERVICE
 
   # ACCOUNT SERVICE
   - export ACCOUNT_SERVICE=sqshq/piggymetrics-account-service
-  - docker build -t $ACCOUNT_SERVICE:$COMMIT ./account-service
+  - docker build -t $ACCOUNT_SERVICE:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST ./account-service
   - docker tag $ACCOUNT_SERVICE:$COMMIT $ACCOUNT_SERVICE:$TAG
   - docker push $ACCOUNT_SERVICE
 
   # STATISTICS SERVICE
   - export STATISTICS_SERVICE=sqshq/piggymetrics-statistics-service
-  - docker build -t $STATISTICS_SERVICE:$COMMIT ./statistics-service
+  - docker build -t $STATISTICS_SERVICE:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST --build-arg ACCOUNT_SERVICE_HOST=$ACCOUNT_SERVICE_HOST ./statistics-service
   - docker tag $STATISTICS_SERVICE:$COMMIT $STATISTICS_SERVICE:$TAG
   - docker push $STATISTICS_SERVICE
 
-  # NOTIFICATION_SERVICE
+  # NOTIFICATION SERVICE
   - export NOTIFICATION_SERVICE=sqshq/piggymetrics-notification-service
-  - docker build -t $NOTIFICATION_SERVICE:$COMMIT ./notification-service
+  - docker build -t $NOTIFICATION_SERVICE:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST --build-arg ACCOUNT_SERVICE_HOST=$ACCOUNT_SERVICE_HOST --build-arg STATISTICS_SERVICE_HOST=$STATISTICS_SERVICE_HOST ./notification-service
   - docker tag $NOTIFICATION_SERVICE:$COMMIT $NOTIFICATION_SERVICE:$TAG
   - docker push $NOTIFICATION_SERVICE
 
   # MONITORING
   - export MONITORING=sqshq/piggymetrics-monitoring
-  - docker build -t $MONITORING:$COMMIT ./monitoring
+  - docker build -t $MONITORING:$COMMIT --build-arg GATEWAY_HOST=$GATEWAY_HOST --build-arg TURBINE_HOST=$TURBINE_HOST ./monitoring
   - docker tag $MONITORING:$COMMIT $MONITORING:$TAG
   - docker push $MONITORING
 
   # TURBINE STREAM SERVICE
   - export TURBINE=sqshq/piggymetrics-turbine-stream-service
-  - docker build -t $TURBINE:$COMMIT ./turbine-stream-service
+  - docker build -t $TURBINE:$COMMIT --build-arg CONFIG_SERVER_URI=$CONFIG_SERVER_URI --build-arg REGISTRY_HOST=$REGISTRY_HOST ./turbine-stream-service
   - docker tag $TURBINE:$COMMIT $TURBINE:$TAG
   - docker push $TURBINE
 
   # MONGO DB
   - export MONGO_DB=sqshq/piggymetrics-mongodb
-  - docker build -t $MONGO_DB:$COMMIT ./mongodb
+  - docker build -t $MONGO_DB:$COMMIT --build-arg CLOUDMAP_NAMESPACE=$CLOUDMAP_NAMESPACE ./mongodb
   - docker tag $MONGO_DB:$COMMIT $MONGO_DB:$TAG
   - docker push $MONGO_DB

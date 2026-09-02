@@ -10,6 +10,20 @@ ribbon:
   ReadTimeout: 20000
   ConnectTimeout: 20000
 
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+spring:
+  cloud:
+    aws:
+      sqs:
+        queue-url: ${SQS_QUEUE_URL}
+      sns:
+        topic-arn: ${SNS_TOPIC_ARN}
+
 zuul:
   ignoredServices: '*'
   host:
@@ -18,28 +32,28 @@ zuul:
 
   routes:
     auth-service:
-        path: /uaa/**
-        url: http://auth-service:5000
-        stripPrefix: false
-        sensitiveHeaders:
+      path: /uaa/**
+      url: ${AUTH_SERVICE_URL:http://auth-service.service.consul:5000}
+      stripPrefix: false
+      sensitiveHeaders:
 
     account-service:
-        path: /accounts/**
-        serviceId: account-service
-        stripPrefix: false
-        sensitiveHeaders:
+      path: /accounts/**
+      url: ${ACCOUNT_SERVICE_URL:http://account-service.service.consul:5000}
+      stripPrefix: false
+      sensitiveHeaders:
 
     statistics-service:
-        path: /statistics/**
-        serviceId: statistics-service
-        stripPrefix: false
-        sensitiveHeaders:
+      path: /statistics/**
+      url: ${STATISTICS_SERVICE_URL:http://statistics-service.service.consul:5000}
+      stripPrefix: false
+      sensitiveHeaders:
 
     notification-service:
-        path: /notifications/**
-        serviceId: notification-service
-        stripPrefix: false
-        sensitiveHeaders:
+      path: /notifications/**
+      url: ${NOTIFICATION_SERVICE_URL:http://notification-service.service.consul:5000}
+      stripPrefix: false
+      sensitiveHeaders:
 
 server:
   port: 4000

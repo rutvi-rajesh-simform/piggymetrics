@@ -1,24 +1,47 @@
 version: '2.1'
+
+x-broker-env: &broker-env
+  BROKER_ENDPOINT: ${BROKER_ENDPOINT:-amqp://rabbitmq:5672}
+  AMQ_BROKER_ENDPOINT: ${AMQ_BROKER_ENDPOINT:-amqp://rabbitmq:5672}
+  BOOTSTRAP_SERVERS: ${BOOTSTRAP_SERVERS:-rabbitmq:5672}
+
+x-ecs-network-env: &ecs-network-env
+  ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+  ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
+
 services:
   rabbitmq:
     ports:
       - 5672:5672
+    hostname: ${BROKER_HOSTNAME:-rabbitmq}
 
   config:
     build: config
     ports:
       - 8888:8888
+    environment:
+      <<: *ecs-network-env
 
   registry:
     build: registry
+    environment:
+      <<: *ecs-network-env
 
   gateway:
     build: gateway
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   auth-service:
     build: auth-service
     ports:
       - 5000:5000
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   auth-mongodb:
     build: mongodb
@@ -29,6 +52,10 @@ services:
     build: account-service
     ports:
       - 6000:6000
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   account-mongodb:
     build: mongodb
@@ -39,6 +66,10 @@ services:
     build: statistics-service
     ports:
       - 7000:7000
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   statistics-mongodb:
     build: mongodb
@@ -49,6 +80,10 @@ services:
     build: notification-service
     ports:
       - 8000:8000
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   notification-mongodb:
     build: mongodb
@@ -57,6 +92,14 @@ services:
 
   monitoring:
     build: monitoring
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}
 
   turbine-stream-service:
     build: turbine-stream-service
+    environment:
+      <<: *broker-env
+      ECS_RUNTIME_DNS_SUFFIX: ${ECS_RUNTIME_DNS_SUFFIX:-}
+      ECS_SERVICE_DISCOVERY_NAMESPACE: ${ECS_SERVICE_DISCOVERY_NAMESPACE:-}

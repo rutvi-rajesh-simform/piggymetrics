@@ -1,0 +1,32 @@
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+  mail:
+    host: ${SES_SMTP_HOST:email-smtp.us-east-1.amazonaws.com}
+    port: ${SES_SMTP_PORT:587}
+    username: ${SES_SMTP_USERNAME}
+    password: ${SES_SMTP_PASSWORD}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: ${SES_SMTP_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${SES_SMTP_TIMEOUT_MS:5000}
+          writetimeout: ${SES_SMTP_WRITE_TIMEOUT_MS:5000}
+
+  data:
+    mongodb:
+      uri: ${DOCUMENTDB_URI:mongodb://${DOCUMENTDB_USERNAME}:${DOCUMENTDB_PASSWORD}@${DOCUMENTDB_ENDPOINT}:${DOCUMENTDB_PORT:27017}/${DOCUMENTDB_DATABASE:notification}?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false}
+      auto-index-creation: ${DOCUMENTDB_AUTO_INDEX_CREATION:false}
+
+notification:
+  email:
+    from: ${SES_FROM_EMAIL:no-reply@example.com}
+    reply-to: ${SES_REPLY_TO_EMAIL:${SES_FROM_EMAIL:no-reply@example.com}}

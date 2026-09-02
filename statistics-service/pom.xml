@@ -15,6 +15,19 @@
 		<version>1.0-SNAPSHOT</version>
 	</parent>
 
+	<properties>
+		<!-- Endpoint-driven service configuration for Cloud Map-resolved services -->
+		<account.service.url>${ACCOUNT_SERVICE_URL:http://account-service}</account.service.url>
+		<notification.service.url>${NOTIFICATION_SERVICE_URL:http://notification-service}</notification.service.url>
+		<!-- Amazon MQ for RabbitMQ (TLS + credentials + vhost) -->
+		<spring.rabbitmq.addresses>${RABBITMQ_ADDRESSES:}</spring.rabbitmq.addresses>
+		<spring.rabbitmq.port>${RABBITMQ_PORT:5671}</spring.rabbitmq.port>
+		<spring.rabbitmq.username>${RABBITMQ_USERNAME:}</spring.rabbitmq.username>
+		<spring.rabbitmq.password>${RABBITMQ_PASSWORD:}</spring.rabbitmq.password>
+		<spring.rabbitmq.virtual-host>${RABBITMQ_VHOST:/}</spring.rabbitmq.virtual-host>
+		<spring.rabbitmq.ssl.enabled>${RABBITMQ_SSL_ENABLED:true}</spring.rabbitmq.ssl.enabled>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -38,7 +51,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>

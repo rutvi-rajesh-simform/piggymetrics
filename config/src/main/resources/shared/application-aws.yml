@@ -1,0 +1,27 @@
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:${AMQP_BROKER_HOST:rabbitmq}}
+    port: ${RABBITMQ_PORT:5671}
+    username: ${RABBITMQ_USERNAME:user}
+    password: ${RABBITMQ_PASSWORD:password}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:true}
+  cloud:
+    discovery:
+      enabled: ${SPRING_CLOUD_DISCOVERY_ENABLED:false}
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    enabled: ${EUREKA_CLIENT_ENABLED:false}
+    registerWithEureka: ${EUREKA_REGISTER_WITH_EUREKA:false}
+    fetchRegistry: ${EUREKA_FETCH_REGISTRY:false}
+    serviceUrl:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://registry:8761/eureka/}
+
+aws:
+  cloud-map:
+    namespace: ${AWS_CLOUD_MAP_NAMESPACE:local}
+    region: ${AWS_REGION:us-east-1}

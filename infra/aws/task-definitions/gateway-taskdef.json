@@ -1,0 +1,101 @@
+{
+  "family": "gateway-taskdef",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<account-id>:role/gatewayTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "gateway",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/gateway:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "<region>"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "<region>"
+        },
+        {
+          "name": "GATEWAY_PORT",
+          "value": "8080"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "<namespace>.local"
+        },
+        {
+          "name": "DOCUMENTDB_ENDPOINT",
+          "value": "<docdb-cluster-endpoint>"
+        },
+        {
+          "name": "DOCUMENTDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCUMENTDB_DATABASE",
+          "value": "gateway"
+        },
+        {
+          "name": "RABBITMQ_ENDPOINT",
+          "value": "<mq-broker-endpoint>"
+        },
+        {
+          "name": "RABBITMQ_PORT",
+          "value": "5671"
+        },
+        {
+          "name": "RABBITMQ_VHOST",
+          "value": "/"
+        },
+        {
+          "name": "SES_REGION",
+          "value": "<region>"
+        },
+        {
+          "name": "SES_FROM_EMAIL",
+          "value": "no-reply@example.com"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCUMENTDB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/documentdb"
+        },
+        {
+          "name": "DOCUMENTDB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/documentdb"
+        },
+        {
+          "name": "RABBITMQ_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/rabbitmq"
+        },
+        {
+          "name": "RABBITMQ_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/rabbitmq"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/gateway",
+          "awslogs-region": "<region>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

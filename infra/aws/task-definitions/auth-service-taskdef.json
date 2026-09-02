@@ -1,0 +1,130 @@
+{
+  "family": "auth-service",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/auth-service-task-role",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "auth-service",
+      "image": "${ECR_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "name": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "APP_ENV",
+          "value": "${APP_ENV}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "PORT",
+          "value": "8080"
+        },
+        {
+          "name": "DOCDB_ENDPOINT",
+          "value": "${DOCDB_ENDPOINT}"
+        },
+        {
+          "name": "DOCDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCDB_DATABASE",
+          "value": "${DOCDB_DATABASE}"
+        },
+        {
+          "name": "DOCDB_REPLICA_SET",
+          "value": "rs0"
+        },
+        {
+          "name": "DOCDB_TLS",
+          "value": "true"
+        },
+        {
+          "name": "DOCDB_READ_PREFERENCE",
+          "value": "secondaryPreferred"
+        },
+        {
+          "name": "AMQP_URL",
+          "value": "${AMQP_URL}"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "AUTH_SERVICE_DNS_NAME",
+          "value": "auth.${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "SES_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "SES_FROM_EMAIL",
+          "value": "${SES_FROM_EMAIL}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCDB_USERNAME",
+          "valueFrom": "${DOCDB_SECRET_ARN}:username::"
+        },
+        {
+          "name": "DOCDB_PASSWORD",
+          "valueFrom": "${DOCDB_SECRET_ARN}:password::"
+        },
+        {
+          "name": "AMQP_USERNAME",
+          "valueFrom": "${MQ_SECRET_ARN}:username::"
+        },
+        {
+          "name": "AMQP_PASSWORD",
+          "valueFrom": "${MQ_SECRET_ARN}:password::"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/auth-service",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "linuxParameters": {
+        "initProcessEnabled": true
+      }
+    }
+  ],
+  "ephemeralStorage": {
+    "sizeInGiB": 21
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "family": "account-service",
+  "taskRoleArn": "${ACCOUNT_SERVICE_TASK_ROLE_ARN}",
+  "executionRoleArn": "${ACCOUNT_SERVICE_EXECUTION_ROLE_ARN}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "account-service",
+      "image": "${ACCOUNT_SERVICE_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "http",
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "PORT",
+          "value": "8080"
+        },
+        {
+          "name": "DOCUMENTDB_HOST",
+          "value": "${DOCUMENTDB_CLUSTER_ENDPOINT}"
+        },
+        {
+          "name": "DOCUMENTDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCUMENTDB_DATABASE",
+          "value": "accounts"
+        },
+        {
+          "name": "DOCUMENTDB_TLS",
+          "value": "true"
+        },
+        {
+          "name": "RABBITMQ_HOST",
+          "value": "${RABBITMQ_BROKER_HOST}"
+        },
+        {
+          "name": "RABBITMQ_PORT",
+          "value": "5671"
+        },
+        {
+          "name": "RABBITMQ_VHOST",
+          "value": "/"
+        },
+        {
+          "name": "RABBITMQ_TLS",
+          "value": "true"
+        },
+        {
+          "name": "SES_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "SES_FROM_ADDRESS",
+          "value": "${SES_FROM_ADDRESS}"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "PROFILE_SERVICE_URL",
+          "value": "http://profile-service.${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "NOTIFICATION_SERVICE_URL",
+          "value": "http://notification-service.${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "AUTH_SERVICE_URL",
+          "value": "http://auth-service.${CLOUD_MAP_NAMESPACE}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCUMENTDB_USERNAME",
+          "valueFrom": "${DOCUMENTDB_USERNAME_SECRET_ARN}"
+        },
+        {
+          "name": "DOCUMENTDB_PASSWORD",
+          "valueFrom": "${DOCUMENTDB_PASSWORD_SECRET_ARN}"
+        },
+        {
+          "name": "RABBITMQ_USERNAME",
+          "valueFrom": "${RABBITMQ_USERNAME_SECRET_ARN}"
+        },
+        {
+          "name": "RABBITMQ_PASSWORD",
+          "valueFrom": "${RABBITMQ_PASSWORD_SECRET_ARN}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/account-service",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      }
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "tags": [
+    {
+      "key": "Service",
+      "value": "account-service"
+    },
+    {
+      "key": "Environment",
+      "value": "${ENVIRONMENT}"
+    }
+  ]
+}

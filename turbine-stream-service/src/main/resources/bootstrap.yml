@@ -3,7 +3,14 @@ spring:
     name: turbine-stream-service
   cloud:
     config:
-      uri: http://config:8888
-      fail-fast: true
+      uri: ${SPRING_CLOUD_CONFIG_URI:http://${CONFIG_SERVICE_HOST:config}:${CONFIG_SERVICE_PORT:8888}}
+      fail-fast: ${SPRING_CLOUD_CONFIG_FAIL_FAST:true}
+      username: ${CONFIG_SERVICE_USERNAME:user}
       password: ${CONFIG_SERVICE_PASSWORD}
-      username: user
+  rabbitmq:
+    addresses: ${SPRING_RABBITMQ_ADDRESSES:amqps://${MQ_BROKER_HOST:broker}:${MQ_BROKER_PORT:5671}}
+    username: ${MQ_BROKER_USERNAME:guest}
+    password: ${MQ_BROKER_PASSWORD:guest}
+    virtual-host: ${MQ_BROKER_VHOST:/}
+    ssl:
+      enabled: ${MQ_BROKER_SSL_ENABLED:true}

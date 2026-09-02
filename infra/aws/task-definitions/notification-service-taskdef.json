@@ -1,0 +1,132 @@
+{
+  "family": "notification-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ECS_EXECUTION_ROLE_NAME}",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ECS_TASK_ROLE_NAME}",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "X86_64"
+  },
+  "containerDefinitions": [
+    {
+      "name": "notification-service",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/notification-service:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "SERVICE_NAME",
+          "value": "notification-service"
+        },
+        {
+          "name": "PORT",
+          "value": "8080"
+        },
+        {
+          "name": "SES_SMTP_HOST",
+          "value": "email-smtp.${AWS_REGION}.amazonaws.com"
+        },
+        {
+          "name": "SES_SMTP_PORT",
+          "value": "587"
+        },
+        {
+          "name": "SES_FROM_ADDRESS",
+          "value": "no-reply@example.com"
+        },
+        {
+          "name": "DOCDB_HOST",
+          "value": "${DOCDB_CLUSTER_ENDPOINT}"
+        },
+        {
+          "name": "DOCDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCDB_DATABASE",
+          "value": "notifications"
+        },
+        {
+          "name": "DOCDB_TLS",
+          "value": "true"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "CLOUD_MAP_SERVICE_NAME",
+          "value": "notification-service"
+        },
+        {
+          "name": "RABBITMQ_HOST",
+          "value": "${RABBITMQ_BROKER_HOST}"
+        },
+        {
+          "name": "RABBITMQ_PORT",
+          "value": "5671"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SES_SMTP_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${SES_SMTP_SECRET_NAME}:username::"
+        },
+        {
+          "name": "SES_SMTP_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${SES_SMTP_SECRET_NAME}:password::"
+        },
+        {
+          "name": "DOCDB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${DOCDB_SECRET_NAME}:username::"
+        },
+        {
+          "name": "DOCDB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${DOCDB_SECRET_NAME}:password::"
+        },
+        {
+          "name": "RABBITMQ_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${RABBITMQ_SECRET_NAME}:username::"
+        },
+        {
+          "name": "RABBITMQ_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${RABBITMQ_SECRET_NAME}:password::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/notification-service",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      }
+    }
+  ]
+}

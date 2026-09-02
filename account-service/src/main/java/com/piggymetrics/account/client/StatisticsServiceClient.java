@@ -7,7 +7,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(name = "statistics-service", fallback = StatisticsServiceClientFallback.class)
+@FeignClient(
+	name = "statistics-service",
+	url = "${STATISTICS_SERVICE_URL}",
+	fallback = StatisticsServiceClientFallback.class
+)
 public interface StatisticsServiceClient {
 
 	@RequestMapping(method = RequestMethod.PUT, value = "/statistics/{accountName}", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)

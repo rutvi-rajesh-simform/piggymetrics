@@ -28,16 +28,16 @@ backup:
 spring:
   data:
     mongodb:
-      host: notification-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+      uri: ${DOCUMENTDB_MONGO_URI}
+      database: ${DOCUMENTDB_DATABASE:piggymetrics}
+      ssl:
+        enabled: ${DOCUMENTDB_TLS_ENABLED:true}
+        invalid-hostname-allowed: ${DOCUMENTDB_TLS_ALLOW_INVALID_HOSTNAME:true}
   mail:
     host: smtp.gmail.com
     port: 465
-    username: dev-user
-    password: dev-password
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
     properties:
       mail:
         smtp:

@@ -1,0 +1,112 @@
+{
+  "family": "turbine-stream-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "X86_64"
+  },
+  "containerDefinitions": [
+    {
+      "name": "turbine-stream-service",
+      "image": "${ECR_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8989,
+          "hostPort": 8989,
+          "protocol": "tcp",
+          "name": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "SPRING_APPLICATION_NAME",
+          "value": "turbine-stream-service"
+        },
+        {
+          "name": "SERVER_PORT",
+          "value": "8989"
+        },
+        {
+          "name": "SPRING_PROFILES_ACTIVE",
+          "value": "aws"
+        },
+        {
+          "name": "SPRING_CLOUD_CONFIG_URI",
+          "value": "http://config.${CLOUD_MAP_NAMESPACE}:8888"
+        },
+        {
+          "name": "EUREKA_CLIENT_SERVICEURL_DEFAULTZONE",
+          "value": "http://registry.${CLOUD_MAP_NAMESPACE}:8761/eureka/"
+        },
+        {
+          "name": "SPRING_RABBITMQ_HOST",
+          "value": "${AMAZON_MQ_RABBITMQ_ENDPOINT}"
+        },
+        {
+          "name": "SPRING_RABBITMQ_PORT",
+          "value": "5671"
+        },
+        {
+          "name": "SPRING_RABBITMQ_SSL_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "SPRING_RABBITMQ_VIRTUAL_HOST",
+          "value": "/"
+        },
+        {
+          "name": "SPRING_DATA_MONGODB_URI",
+          "value": "${DOCUMENTDB_CONNECTION_URI}"
+        },
+        {
+          "name": "NOTIFICATIONS_EMAIL_FROM",
+          "value": "${SES_FROM_EMAIL}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "CONFIG_SERVICE_PASSWORD",
+          "valueFrom": "${CONFIG_SERVICE_PASSWORD_SECRET_ARN}"
+        },
+        {
+          "name": "SPRING_RABBITMQ_USERNAME",
+          "valueFrom": "${AMAZON_MQ_USERNAME_SECRET_ARN}"
+        },
+        {
+          "name": "SPRING_RABBITMQ_PASSWORD",
+          "valueFrom": "${AMAZON_MQ_PASSWORD_SECRET_ARN}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${CLOUDWATCH_LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8989/actuator/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

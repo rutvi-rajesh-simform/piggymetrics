@@ -1,0 +1,141 @@
+{
+  "family": "config-service-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "config-service",
+      "image": "${CONFIG_SERVICE_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "name": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "APP_ENV",
+          "value": "${APP_ENV}"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "${LOG_LEVEL}"
+        },
+        {
+          "name": "DOCUMENTDB_ENDPOINT",
+          "value": "${DOCUMENTDB_ENDPOINT}"
+        },
+        {
+          "name": "DOCUMENTDB_PORT",
+          "value": "${DOCUMENTDB_PORT}"
+        },
+        {
+          "name": "DOCUMENTDB_DATABASE",
+          "value": "${DOCUMENTDB_DATABASE}"
+        },
+        {
+          "name": "DOCUMENTDB_TLS_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "RABBITMQ_HOST",
+          "value": "${RABBITMQ_HOST}"
+        },
+        {
+          "name": "RABBITMQ_PORT",
+          "value": "${RABBITMQ_PORT}"
+        },
+        {
+          "name": "RABBITMQ_VHOST",
+          "value": "${RABBITMQ_VHOST}"
+        },
+        {
+          "name": "RABBITMQ_EXCHANGE",
+          "value": "${RABBITMQ_EXCHANGE}"
+        },
+        {
+          "name": "SES_REGION",
+          "value": "${SES_REGION}"
+        },
+        {
+          "name": "SES_FROM_ADDRESS",
+          "value": "${SES_FROM_ADDRESS}"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE_ID",
+          "value": "${CLOUD_MAP_NAMESPACE_ID}"
+        },
+        {
+          "name": "CLOUD_MAP_SERVICE_ID",
+          "value": "${CLOUD_MAP_SERVICE_ID}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCUMENTDB_USERNAME",
+          "valueFrom": "${DOCUMENTDB_USERNAME_SECRET_ARN}"
+        },
+        {
+          "name": "DOCUMENTDB_PASSWORD",
+          "valueFrom": "${DOCUMENTDB_PASSWORD_SECRET_ARN}"
+        },
+        {
+          "name": "RABBITMQ_USERNAME",
+          "valueFrom": "${RABBITMQ_USERNAME_SECRET_ARN}"
+        },
+        {
+          "name": "RABBITMQ_PASSWORD",
+          "valueFrom": "${RABBITMQ_PASSWORD_SECRET_ARN}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${CLOUDWATCH_LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      }
+    }
+  ],
+  "ephemeralStorage": {
+    "sizeInGiB": 21
+  },
+  "tags": [
+    {
+      "key": "Service",
+      "value": "config"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "terraform"
+    }
+  ]
+}

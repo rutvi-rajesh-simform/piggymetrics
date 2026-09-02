@@ -1,0 +1,132 @@
+{
+  "family": "statistics-service",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/statistics-service-task-role",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecs-task-execution-role",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "statistics-service",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/statistics-service:<IMAGE_TAG>",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "http",
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "<AWS_REGION>"
+        },
+        {
+          "name": "SPRING_PROFILES_ACTIVE",
+          "value": "aws"
+        },
+        {
+          "name": "SERVER_PORT",
+          "value": "8080"
+        },
+        {
+          "name": "DOCUMENTDB_ENDPOINT",
+          "value": "docdb-cluster.cluster-xxxxxxxxxxxx.<AWS_REGION>.docdb.amazonaws.com"
+        },
+        {
+          "name": "DOCUMENTDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCUMENTDB_DATABASE",
+          "value": "statistics"
+        },
+        {
+          "name": "DOCUMENTDB_TLS_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "DOCUMENTDB_REPLICA_SET",
+          "value": "rs0"
+        },
+        {
+          "name": "DOCUMENTDB_READ_PREFERENCE",
+          "value": "secondaryPreferred"
+        },
+        {
+          "name": "USER_SERVICE_ENDPOINT",
+          "value": "http://user-service.service.local"
+        },
+        {
+          "name": "ORDER_SERVICE_ENDPOINT",
+          "value": "http://order-service.service.local"
+        },
+        {
+          "name": "PAYMENT_SERVICE_ENDPOINT",
+          "value": "http://payment-service.service.local"
+        },
+        {
+          "name": "AMQP_ENDPOINT",
+          "value": "amqps://b-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.mq.<AWS_REGION>.amazonaws.com:5671"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "service.local"
+        },
+        {
+          "name": "SES_REGION",
+          "value": "<AWS_REGION>"
+        },
+        {
+          "name": "SES_FROM_ADDRESS",
+          "value": "no-reply@example.com"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCUMENTDB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<ACCOUNT_ID>:secret:statistics/documentdb:username::"
+        },
+        {
+          "name": "DOCUMENTDB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<ACCOUNT_ID>:secret:statistics/documentdb:password::"
+        },
+        {
+          "name": "AMQP_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<ACCOUNT_ID>:secret:statistics/rabbitmq:username::"
+        },
+        {
+          "name": "AMQP_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<ACCOUNT_ID>:secret:statistics/rabbitmq:password::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/statistics-service",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

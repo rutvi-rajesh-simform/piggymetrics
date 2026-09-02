@@ -15,11 +15,45 @@
 		<version>1.0-SNAPSHOT</version>
 	</parent>
 
+	<properties>
+		<awspring-cloud.version>3.1.1</awspring-cloud.version>
+
+		<!-- Cloud Map endpoint-driven service URLs -->
+		<service.auth.endpoint>${AUTH_SERVICE_ENDPOINT:http://auth.service.local}</service.auth.endpoint>
+		<service.account.endpoint>${ACCOUNT_SERVICE_ENDPOINT:http://account.service.local}</service.account.endpoint>
+		<service.statistics.endpoint>${STATISTICS_SERVICE_ENDPOINT:http://statistics.service.local}</service.statistics.endpoint>
+		<service.notification.endpoint>${NOTIFICATION_SERVICE_ENDPOINT:http://notification.service.local}</service.notification.endpoint>
+
+		<!-- Amazon MQ for RabbitMQ (TLS + credentials + vhost) -->
+		<spring.rabbitmq.host>${RABBITMQ_HOST:localhost}</spring.rabbitmq.host>
+		<spring.rabbitmq.port>${RABBITMQ_PORT:5671}</spring.rabbitmq.port>
+		<spring.rabbitmq.username>${RABBITMQ_USERNAME:guest}</spring.rabbitmq.username>
+		<spring.rabbitmq.password>${RABBITMQ_PASSWORD}</spring.rabbitmq.password>
+		<spring.rabbitmq.virtual-host>${RABBITMQ_VHOST:/}</spring.rabbitmq.virtual-host>
+		<spring.rabbitmq.ssl.enabled>${RABBITMQ_SSL_ENABLED:true}</spring.rabbitmq.ssl.enabled>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>io.awspring.cloud</groupId>
+				<artifactId>spring-cloud-aws-dependencies</artifactId>
+				<version>${awspring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>io.awspring.cloud</groupId>
+			<artifactId>spring-cloud-aws-starter-service-discovery</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-config</artifactId>

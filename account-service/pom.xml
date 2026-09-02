@@ -15,6 +15,19 @@
 		<version>1.0-SNAPSHOT</version>
 	</parent>
 
+	<properties>
+		<!-- Cloud Map / endpoint-driven service resolution -->
+		<auth.service.url>${AUTH_SERVICE_URL:https://auth.internal}</auth.service.url>
+		<statistics.service.url>${STATISTICS_SERVICE_URL:https://statistics.internal}</statistics.service.url>
+
+		<!-- Amazon MQ for RabbitMQ (TLS + credentials + vhost) -->
+		<rabbitmq.addresses>${RABBITMQ_ADDRESSES:amqps://localhost:5671}</rabbitmq.addresses>
+		<rabbitmq.username>${RABBITMQ_USERNAME}</rabbitmq.username>
+		<rabbitmq.password>${RABBITMQ_PASSWORD}</rabbitmq.password>
+		<rabbitmq.virtual-host>${RABBITMQ_VHOST:/}</rabbitmq.virtual-host>
+		<rabbitmq.ssl.enabled>${RABBITMQ_SSL_ENABLED:true}</rabbitmq.ssl.enabled>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
@@ -38,7 +51,11 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>servicediscovery</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
@@ -82,7 +99,7 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-	
+
 	<build>
 		<plugins>
 			<plugin>

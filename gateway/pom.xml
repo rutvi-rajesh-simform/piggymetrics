@@ -15,6 +15,17 @@
 		<version>1.0-SNAPSHOT</version>
 	</parent>
 
+	<properties>
+		<!-- Endpoint-driven service resolution (Cloud Map DNS / environment-provided URLs) -->
+		<auth.service.url>${AUTH_SERVICE_URL:http://auth.service.local}</auth.service.url>
+		<account.service.url>${ACCOUNT_SERVICE_URL:http://account.service.local}</account.service.url>
+		<statistics.service.url>${STATISTICS_SERVICE_URL:http://statistics.service.local}</statistics.service.url>
+
+		<!-- AWS-native queue messaging configuration (SQS URL + region) -->
+		<app.sqs.queue-url>${SQS_QUEUE_URL:}</app.sqs.queue-url>
+		<spring.cloud.aws.region.static>${AWS_REGION:us-east-1}</spring.cloud.aws.region.static>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
@@ -30,7 +41,11 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.awspring.cloud</groupId>
+			<artifactId>spring-cloud-aws-starter-sqs</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>

@@ -23,9 +23,9 @@ Contains general input logic and validation: incomes/expenses items, savings and
 
 Method	| Path	| Description	| User authenticated	| Available from UI
 ------------- | ------------------------- | ------------- |:-------------:|:----------------:|
-GET	| /accounts/{account}	| Get specified account data	|  | 	
+GET	| /accounts/{account}	| Get specified account data	|  |	
 GET	| /accounts/current	| Get current account data	| × | ×
-GET	| /accounts/demo	| Get demo account data (pre-filled incomes/expenses items, etc)	|   | 	×
+GET	| /accounts/demo	| Get demo account data (pre-filled incomes/expenses items, etc)	|   |	×
 PUT	| /accounts/current	| Save current account data	| × | ×
 POST	| /accounts/	| Register new account	|   | ×
 
@@ -35,7 +35,7 @@ Performs calculations on major statistics parameters and captures time series fo
 
 Method	| Path	| Description	| User authenticated	| Available from UI
 ------------- | ------------------------- | ------------- |:-------------:|:----------------:|
-GET	| /statistics/{account}	| Get specified account statistics	          |  | 	
+GET	| /statistics/{account}	| Get specified account statistics	          |  |	
 GET	| /statistics/current	| Get current account statistics	| × | × 
 GET	| /statistics/demo	| Get demo account statistics	|   | × 
 PUT	| /statistics/{account}	| Create or update time series datapoint for specified account	|   | 
@@ -65,16 +65,22 @@ In this project, we are going to use `native profile`, which simply loads config
 ##### Client side usage
 Just build Spring Boot application with `spring-cloud-starter-config` dependency, autoconfiguration will do the rest.
 
-Now you don't need any embedded properties in your application. Just provide `bootstrap.yml` with application name and Config service url:
+Now you don't need any embedded properties in your application. Just provide `bootstrap.yml` with application name and Config service URI parameterized via environment variables (works for local Docker, ECS/Cloud Map, and other environments):
 ```yml
 spring:
   application:
     name: notification-service
   cloud:
     config:
-      uri: http://config:8888
-      fail-fast: true
+      uri: ${CONFIG_SERVER_URI:http://localhost:8888}
+      fail-fast: ${CONFIG_FAIL_FAST:true}
 ```
+
+For ECS/Cloud Map, set `CONFIG_SERVER_URI` to your internal DNS name, for example:
+- `CONFIG_SERVER_URI=http://config.internal:8888`
+- `CONFIG_SERVER_URI=http://config-service.my-namespace:8888`
+
+Avoid hardcoding docker-compose host aliases (for example `http://config:8888`) in committed config files.
 
 ##### With Spring Cloud Config, you can change application config dynamically. 
 For example, [EmailService bean](https://github.com/sqshq/PiggyMetrics/blob/master/notification-service/src/main/java/com/piggymetrics/notification/service/EmailServiceImpl.java) is annotated with `@RefreshScope`. That means you can change e-mail text and subject without rebuild and restart the Notification service.
@@ -243,10 +249,19 @@ If you'd like to build images yourself, you have to clone the repository and bui
 
 If you'd like to start applications in Intellij Idea you need to either use [EnvFile plugin](https://plugins.jetbrains.com/plugin/7861-envfile) or manually export environment variables listed in `.env` file (make sure they were exported: `printenv`)
 
+#### Internal service endpoint configuration (container environments)
+For ECS/Cloud Map or any orchestrated runtime, configure internal service hosts via environment variables rather than docker-compose aliases:
+
+- `CONFIG_SERVER_URI` (example: `http://config.internal:8888`)
+- `EUREKA_CLIENT_SERVICEURL_DEFAULTZONE` (example: `http://discovery.internal:8761/eureka/`)
+- `TURBINE_STREAM_URL` (example: `http://monitoring.internal:8080/turbine/turbine.stream`)
+
+Use placeholders in service config files and avoid hardcoded names like `config`, `turbine-stream-service`, or other local compose-only aliases.
+
 #### Important endpoints
 - http://localhost:80 - Gateway
 - http://localhost:8761 - Eureka Dashboard
-- http://localhost:9000/hystrix - Hystrix Dashboard (Turbine stream link: `http://turbine-stream-service:8080/turbine/turbine.stream`)
+- http://localhost:9000/hystrix - Hystrix Dashboard (Turbine stream link should use `${TURBINE_STREAM_URL}`)
 - http://localhost:15672 - RabbitMq management (default login/password: guest/guest)
 
 ## Contributions are welcome!

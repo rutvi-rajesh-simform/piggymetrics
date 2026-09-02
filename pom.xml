@@ -1,48 +1,63 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<groupId>com.piggymetrics</groupId>
-	<artifactId>piggymetrics</artifactId>
-	<version>1.0-SNAPSHOT</version>
-	<packaging>pom</packaging>
-	<name>piggymetrics</name>
+    <groupId>com.piggymetrics</groupId>
+    <artifactId>piggymetrics</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>piggymetrics</name>
 
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.0.3.RELEASE</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.0.3.RELEASE</version>
+        <relativePath/>
+    </parent>
 
-	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<spring-cloud.version>Finchley.RELEASE</spring-cloud.version>
-		<java.version>1.8</java.version>
-	</properties>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-cloud.version>Finchley.RELEASE</spring-cloud.version>
+        <java.version>1.8</java.version>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
-	
-	<modules>
-		<module>config</module>
-		<module>monitoring</module>
-		<module>registry</module>
-		<module>gateway</module>
-		<module>auth-service</module>
-		<module>account-service</module>
-		<module>statistics-service</module>
-		<module>notification-service</module>
-		<module>turbine-stream-service</module>
-	</modules>
+        <!-- Service discovery via endpoint-driven Cloud Map resolution (no Eureka host assumptions) -->
+        <service.discovery.namespace>${env.CLOUD_MAP_NAMESPACE}</service.discovery.namespace>
+        <service.endpoint.protocol>${env.SERVICE_ENDPOINT_PROTOCOL}</service.endpoint.protocol>
+        <auth-service.endpoint>${env.AUTH_SERVICE_ENDPOINT}</auth-service.endpoint>
+        <account-service.endpoint>${env.ACCOUNT_SERVICE_ENDPOINT}</account-service.endpoint>
+        <statistics-service.endpoint>${env.STATISTICS_SERVICE_ENDPOINT}</statistics-service.endpoint>
+        <notification-service.endpoint>${env.NOTIFICATION_SERVICE_ENDPOINT}</notification-service.endpoint>
+
+        <!-- Amazon MQ for RabbitMQ (TLS + credentials + vhost) -->
+        <spring.rabbitmq.addresses>${env.AMAZON_MQ_RABBITMQ_ENDPOINTS}</spring.rabbitmq.addresses>
+        <spring.rabbitmq.username>${env.AMAZON_MQ_RABBITMQ_USERNAME}</spring.rabbitmq.username>
+        <spring.rabbitmq.password>${env.AMAZON_MQ_RABBITMQ_PASSWORD}</spring.rabbitmq.password>
+        <spring.rabbitmq.virtual-host>${env.AMAZON_MQ_RABBITMQ_VHOST}</spring.rabbitmq.virtual-host>
+        <spring.rabbitmq.ssl.enabled>true</spring.rabbitmq.ssl.enabled>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <modules>
+        <module>config</module>
+        <module>monitoring</module>
+        <module>registry</module>
+        <module>gateway</module>
+        <module>auth-service</module>
+        <module>account-service</module>
+        <module>statistics-service</module>
+        <module>notification-service</module>
+        <module>turbine-stream-service</module>
+    </modules>
 
 </project>

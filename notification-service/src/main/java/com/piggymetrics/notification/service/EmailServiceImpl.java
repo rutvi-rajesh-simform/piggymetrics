@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.mail.MessagingException;
+import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.text.MessageFormat;
@@ -21,6 +22,9 @@ import java.text.MessageFormat;
 @Service
 @RefreshScope
 public class EmailServiceImpl implements EmailService {
+
+	private static final String MAIL_FROM_ADDRESS_PROPERTY = "notification.email.from";
+	private static final String MAIL_FROM_NAME_PROPERTY = "notification.email.from-name";
 
 	private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -35,6 +39,12 @@ public class EmailServiceImpl implements EmailService {
 
 		final String subject = env.getProperty(type.getSubject());
 		final String text = MessageFormat.format(env.getProperty(type.getText()), recipient.getAccountName());
+		final String fromAddress = env.getProperty(MAIL_FROM_ADDRESS_PROPERTY);
+		final String fromName = env.getProperty(MAIL_FROM_NAME_PROPERTY);
+
+		if (!StringUtils.hasText(fromAddress)) {
+			throw new IllegalStateException("Missing required mail sender identity property: " + MAIL_FROM_ADDRESS_PROPERTY);
+		}
 
 		MimeMessage message = mailSender.createMimeMessage();
 
@@ -42,6 +52,11 @@ public class EmailServiceImpl implements EmailService {
 		helper.setTo(recipient.getEmail());
 		helper.setSubject(subject);
 		helper.setText(text);
+		if (StringUtils.hasText(fromName)) {
+			helper.setFrom(new InternetAddress(fromAddress, fromName));
+		} else {
+			helper.setFrom(fromAddress);
+		}
 
 		if (StringUtils.hasLength(attachment)) {
 			helper.addAttachment(env.getProperty(type.getAttachment()), new ByteArrayResource(attachment.getBytes()));
@@ -49,6 +64,6 @@ public class EmailServiceImpl implements EmailService {
 
 		mailSender.send(message);
 
-		log.info("{} email notification has been send to {}", type, recipient.getEmail());
+		log.info("{} email notification has been sent to {} from {}", type, recipient.getEmail(), fromAddress);
 	}
 }

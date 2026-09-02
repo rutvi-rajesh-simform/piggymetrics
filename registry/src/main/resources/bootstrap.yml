@@ -3,16 +3,23 @@ spring:
     name: registry
   cloud:
     config:
-      uri: http://config:8888
+      uri: ${CONFIG_SERVICE_URI}
       fail-fast: true
-      password: ${CONFIG_SERVICE_PASSWORD}
       username: user
+      password: ${CONFIG_SERVICE_PASSWORD}
+  rabbitmq:
+    addresses: ${AMQ_RABBITMQ_ENDPOINTS}
+    username: ${AMQ_RABBITMQ_USERNAME}
+    password: ${AMQ_RABBITMQ_PASSWORD}
+    virtual-host: ${AMQ_RABBITMQ_VHOST:/}
+    ssl:
+      enabled: true
+      algorithm: TLSv1.2
 
-eureka:
-  instance:
-    prefer-ip-address: true
-  client:
-    registerWithEureka: false
-    fetchRegistry: false
-    server:
-      waitTimeInMsWhenSyncEmpty: 0
+services:
+  discovery:
+    provider: cloud-map
+  endpoints:
+    config: ${CONFIG_SERVICE_URI}
+    registry: ${REGISTRY_SERVICE_URI}
+    gateway: ${GATEWAY_SERVICE_URI}
