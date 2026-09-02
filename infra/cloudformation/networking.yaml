@@ -1,0 +1,304 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Networking prerequisites for private Amazon DocumentDB and Amazon MQ (RabbitMQ) endpoints.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: app
+    Description: Prefix used for naming and tagging resources.
+
+  VpcCidr:
+    Type: String
+    Default: 10.40.0.0/16
+    Description: CIDR block for the VPC.
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.40.0.0/24
+    Description: CIDR block for public subnet A.
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.40.1.0/24
+    Description: CIDR block for public subnet B.
+
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.40.10.0/24
+    Description: CIDR block for private subnet A (DocumentDB/MQ).
+
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.40.11.0/24
+    Description: CIDR block for private subnet B (DocumentDB/MQ).
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-igw'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetACidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-a'
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetBCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-b'
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnetACidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnetBCidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-rt'
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  NatEipA:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatEipB:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-a'
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-b'
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-rt-a'
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-rt-b'
+
+  PrivateDefaultRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  PrivateDefaultRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
+  AppClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Client/application security group allowed to connect to DocumentDB and Amazon MQ.
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-app-clients-sg'
+
+  DocumentDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Amazon DocumentDB cluster endpoint.
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref AppClientSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-docdb-sg'
+
+  AmazonMQSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Amazon MQ (RabbitMQ) private endpoints.
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5671
+          ToPort: 5671
+          SourceSecurityGroupId: !Ref AppClientSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref AppClientSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 15671
+          ToPort: 15671
+          SourceSecurityGroupId: !Ref AppClientSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-mq-sg'
+
+  DocumentDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets used by Amazon DocumentDB.
+      DBSubnetGroupName: !Sub '${ProjectName}-docdb-subnet-group'
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-docdb-subnet-group'
+
+Outputs:
+  VpcId:
+    Description: VPC ID for private data plane resources.
+    Value: !Ref VPC
+
+  PrivateSubnetAId:
+    Description: Private subnet A for DocumentDB/Amazon MQ.
+    Value: !Ref PrivateSubnetA
+
+  PrivateSubnetBId:
+    Description: Private subnet B for DocumentDB/Amazon MQ.
+    Value: !Ref PrivateSubnetB
+
+  DocumentDBSubnetGroupName:
+    Description: Subnet group to use when provisioning Amazon DocumentDB cluster instances.
+    Value: !Ref DocumentDBSubnetGroup
+
+  AppClientSecurityGroupId:
+    Description: Security group for application clients that connect to private endpoints.
+    Value: !Ref AppClientSecurityGroup
+
+  DocumentDBSecurityGroupId:
+    Description: Security group ID to attach to Amazon DocumentDB.
+    Value: !Ref DocumentDBSecurityGroup
+
+  AmazonMQSecurityGroupId:
+    Description: Security group ID to attach to Amazon MQ (RabbitMQ) broker.
+    Value: !Ref AmazonMQSecurityGroup
+
+  PrivateRouteTableAId:
+    Description: Route table associated with private subnet A.
+    Value: !Ref PrivateRouteTableA
+
+  PrivateRouteTableBId:
+    Description: Route table associated with private subnet B.
+    Value: !Ref PrivateRouteTableB
