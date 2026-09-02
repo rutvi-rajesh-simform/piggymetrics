@@ -1,15 +1,14 @@
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:aws}
   cloud:
     config:
       server:
         native:
-          search-locations: classpath:/shared
-  profiles:
-     active: native
+          search-locations: ${CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS:classpath:/shared}
   security:
     user:
       password: ${CONFIG_SERVICE_PASSWORD}
 
 server:
-  port: 8888
-
+  port: ${SERVER_PORT:8888}
