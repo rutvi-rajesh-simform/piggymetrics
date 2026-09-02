@@ -1,0 +1,280 @@
+name: aws-deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - 'infrastructure/**'
+      - 'services/**'
+      - 'apps/**'
+      - '.github/workflows/aws-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_env:
+        description: 'Deployment environment (dev/stage/prod)'
+        required: false
+        default: 'prod'
+      force_rolling_update:
+        description: 'Force rolling update for services'
+        required: false
+        default: 'true'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  DEPLOY_ENV: ${{ github.event.inputs.deploy_env || vars.DEPLOY_ENV || 'prod' }}
+  CFN_STACK_NAME: ${{ vars.CFN_STACK_NAME }}
+  CFN_TEMPLATE_FILE: ${{ vars.CFN_TEMPLATE_FILE || 'infra/aws/template.yml' }}
+  CFN_PARAMETER_FILE: ${{ vars.CFN_PARAMETER_FILE || '' }}
+  ECS_CLUSTER_NAME: ${{ vars.ECS_CLUSTER_NAME || '' }}
+  ECS_SERVICE_NAMES: ${{ vars.ECS_SERVICE_NAMES || '' }}
+  API_GATEWAY_ID: ${{ vars.API_GATEWAY_ID || '' }}
+  API_GATEWAY_STAGE: ${{ vars.API_GATEWAY_STAGE || 'prod' }}
+  DOCDB_CLUSTER_ID: ${{ vars.DOCDB_CLUSTER_ID || '' }}
+  CLOUD_MAP_NAMESPACE_ID: ${{ vars.CLOUD_MAP_NAMESPACE_ID || '' }}
+  MQ_BROKER_ID: ${{ vars.MQ_BROKER_ID || '' }}
+  SES_IDENTITY: ${{ vars.SES_IDENTITY || '' }}
+  SECRETS_REQUIRED: ${{ vars.SECRETS_REQUIRED || '' }}
+
+jobs:
+  validate-and-plan:
+    name: Validate CloudFormation template
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate required workflow variables
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION}" || (echo "AWS_REGION is required" && exit 1)
+          test -n "${CFN_STACK_NAME}" || (echo "CFN_STACK_NAME is required" && exit 1)
+          test -f "${CFN_TEMPLATE_FILE}" || (echo "Template file not found: ${CFN_TEMPLATE_FILE}" && exit 1)
+
+      - name: Validate CloudFormation syntax
+        run: |
+          set -euo pipefail
+          aws cloudformation validate-template --template-body "file://${CFN_TEMPLATE_FILE}"
+
+      - name: Create change set preview
+        run: |
+          set -euo pipefail
+          CHANGE_SET_NAME="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          PARAM_ARGS=""
+          if [ -n "${CFN_PARAMETER_FILE}" ] && [ -f "${CFN_PARAMETER_FILE}" ]; then
+            PARAM_ARGS="--parameters file://${CFN_PARAMETER_FILE}"
+          fi
+
+          if aws cloudformation describe-stacks --stack-name "${CFN_STACK_NAME}" >/dev/null 2>&1; then
+            CHANGE_SET_TYPE="UPDATE"
+          else
+            CHANGE_SET_TYPE="CREATE"
+          fi
+
+          aws cloudformation create-change-set \
+            --stack-name "${CFN_STACK_NAME}" \
+            --template-body "file://${CFN_TEMPLATE_FILE}" \
+            --change-set-name "${CHANGE_SET_NAME}" \
+            --change-set-type "${CHANGE_SET_TYPE}" \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            ${PARAM_ARGS}
+
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "${CFN_STACK_NAME}" \
+            --change-set-name "${CHANGE_SET_NAME}" || true
+
+          aws cloudformation describe-change-set \
+            --stack-name "${CFN_STACK_NAME}" \
+            --change-set-name "${CHANGE_SET_NAME}" || true
+
+          aws cloudformation delete-change-set \
+            --stack-name "${CFN_STACK_NAME}" \
+            --change-set-name "${CHANGE_SET_NAME}" || true
+
+  deploy-infrastructure:
+    name: Deploy infrastructure
+    runs-on: ubuntu-latest
+    needs: validate-and-plan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          set -euo pipefail
+          PARAM_ARGS=""
+          if [ -n "${CFN_PARAMETER_FILE}" ] && [ -f "${CFN_PARAMETER_FILE}" ]; then
+            PARAM_ARGS="--parameter-overrides $(jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' "${CFN_PARAMETER_FILE}" | xargs)"
+          fi
+
+          aws cloudformation deploy \
+            --stack-name "${CFN_STACK_NAME}" \
+            --template-file "${CFN_TEMPLATE_FILE}" \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset \
+            ${PARAM_ARGS}
+
+      - name: Verify stack status
+        run: |
+          set -euo pipefail
+          STATUS=$(aws cloudformation describe-stacks --stack-name "${CFN_STACK_NAME}" --query 'Stacks[0].StackStatus' --output text)
+          echo "Stack status: ${STATUS}"
+          case "${STATUS}" in
+            CREATE_COMPLETE|UPDATE_COMPLETE|UPDATE_ROLLBACK_COMPLETE)
+              ;;
+            *)
+              echo "Unexpected stack status: ${STATUS}"
+              exit 1
+              ;;
+          esac
+
+  rolling-service-updates:
+    name: Rolling service updates
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: ${{ vars.ECS_CLUSTER_NAME != '' && vars.ECS_SERVICE_NAMES != '' }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Perform ECS rolling deployments
+        run: |
+          set -euo pipefail
+          FORCE="${{ github.event.inputs.force_rolling_update || 'true' }}"
+          IFS=',' read -ra SERVICES <<< "${ECS_SERVICE_NAMES}"
+
+          for raw in "${SERVICES[@]}"; do
+            SERVICE=$(echo "${raw}" | xargs)
+            if [ -z "${SERVICE}" ]; then
+              continue
+            fi
+
+            echo "Updating ECS service: ${SERVICE} in cluster: ${ECS_CLUSTER_NAME}"
+
+            if [ "${FORCE}" = "true" ]; then
+              aws ecs update-service \
+                --cluster "${ECS_CLUSTER_NAME}" \
+                --service "${SERVICE}" \
+                --force-new-deployment >/dev/null
+            else
+              aws ecs update-service \
+                --cluster "${ECS_CLUSTER_NAME}" \
+                --service "${SERVICE}" >/dev/null
+            fi
+
+            aws ecs wait services-stable \
+              --cluster "${ECS_CLUSTER_NAME}" \
+              --services "${SERVICE}"
+
+            echo "Service stable: ${SERVICE}"
+          done
+
+  deploy-api-gateway:
+    name: Deploy API Gateway stage
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: ${{ vars.API_GATEWAY_ID != '' }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create API Gateway deployment
+        run: |
+          set -euo pipefail
+          aws apigateway create-deployment \
+            --rest-api-id "${API_GATEWAY_ID}" \
+            --stage-name "${API_GATEWAY_STAGE}" \
+            --description "GitHub Actions deployment ${GITHUB_SHA}"
+
+  post-deploy-checks:
+    name: Post-deploy service checks
+    runs-on: ubuntu-latest
+    needs:
+      - deploy-infrastructure
+      - rolling-service-updates
+      - deploy-api-gateway
+    if: always() && needs.deploy-infrastructure.result == 'success'
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify Amazon DocumentDB cluster (optional)
+        run: |
+          set -euo pipefail
+          if [ -n "${DOCDB_CLUSTER_ID}" ]; then
+            aws docdb describe-db-clusters --db-cluster-identifier "${DOCDB_CLUSTER_ID}" >/dev/null
+            echo "DocumentDB cluster is reachable: ${DOCDB_CLUSTER_ID}"
+          else
+            echo "DOCDB_CLUSTER_ID not set; skipping DocumentDB check"
+          fi
+
+      - name: Verify AWS Cloud Map namespace (optional)
+        run: |
+          set -euo pipefail
+          if [ -n "${CLOUD_MAP_NAMESPACE_ID}" ]; then
+            aws servicediscovery get-namespace --id "${CLOUD_MAP_NAMESPACE_ID}" >/dev/null
+            echo "Cloud Map namespace is reachable: ${CLOUD_MAP_NAMESPACE_ID}"
+          else
+            echo "CLOUD_MAP_NAMESPACE_ID not set; skipping Cloud Map check"
+          fi
+
+      - name: Verify Amazon MQ broker (optional)
+        run: |
+          set -euo pipefail
+          if [ -n "${MQ_BROKER_ID}" ]; then
+            aws mq describe-broker --broker-id "${MQ_BROKER_ID}" >/dev/null
+            echo "Amazon MQ broker is reachable: ${MQ_BROKER_ID}"
+          else
+            echo "MQ_BROKER_ID not set; skipping Amazon MQ check"
+          fi
+
+      - name: Verify Amazon SES identity (optional)
+        run: |
+          set -euo pipefail
+          if [ -n "${SES_IDENTITY}" ]; then
+            aws sesv2 get-email-identity --email-identity "${SES_IDENTITY}" >/dev/null
+            echo "SES identity is configured: ${SES_IDENTITY}"
+          else
+            echo "SES_IDENTITY not set; skipping SES identity check"
+          fi
+
+      - name: Verify AWS Secrets Manager secrets (optional)
+        run: |
+          set -euo pipefail
+          if [ -n "${SECRETS_REQUIRED}" ]; then
+            IFS=',' read -ra SECRET_NAMES <<< "${SECRETS_REQUIRED}"
+            for raw in "${SECRET_NAMES[@]}"; do
+              SECRET_NAME=$(echo "${raw}" | xargs)
+              [ -n "${SECRET_NAME}" ] || continue
+              aws secretsmanager describe-secret --secret-id "${SECRET_NAME}" >/dev/null
+              echo "Secret exists: ${SECRET_NAME}"
+            done
+          else
+            echo "SECRETS_REQUIRED not set; skipping Secrets Manager checks"
+          fi
