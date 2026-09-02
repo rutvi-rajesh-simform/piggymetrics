@@ -1,45 +1,29 @@
-hystrix:
-  command:
-    default:
-      execution:
-        isolation:
-          thread:
-            timeoutInMilliseconds: 20000
-
-ribbon:
-  ReadTimeout: 20000
-  ConnectTimeout: 20000
-
-zuul:
-  ignoredServices: '*'
-  host:
-    connect-timeout-millis: 20000
-    socket-timeout-millis: 20000
-
-  routes:
-    auth-service:
+app:
+  gateway:
+    mode: api-gateway-fronted
+    edge-proxy-enabled: false
+    backend-services:
+      auth-service:
         path: /uaa/**
         url: http://auth-service:5000
-        stripPrefix: false
-        sensitiveHeaders:
-
-    account-service:
+        strip-prefix: false
+      account-service:
         path: /accounts/**
-        serviceId: account-service
-        stripPrefix: false
-        sensitiveHeaders:
-
-    statistics-service:
+        url: http://account-service:5000
+        strip-prefix: false
+      statistics-service:
         path: /statistics/**
-        serviceId: statistics-service
-        stripPrefix: false
-        sensitiveHeaders:
-
-    notification-service:
+        url: http://statistics-service:5000
+        strip-prefix: false
+      notification-service:
         path: /notifications/**
-        serviceId: notification-service
-        stripPrefix: false
-        sensitiveHeaders:
+        url: http://notification-service:5000
+        strip-prefix: false
+
+http:
+  client:
+    connect-timeout-millis: 20000
+    read-timeout-millis: 20000
 
 server:
   port: 4000
