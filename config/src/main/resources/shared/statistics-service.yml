@@ -10,11 +10,12 @@ security:
 spring:
   data:
     mongodb:
-      host: statistics-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+      uri: ${APPCONFIG_DOCUMENTDB_URI}
+      username: ${APPCONFIG_DOCUMENTDB_USERNAME}
+      password: ${APPCONFIG_DOCUMENTDB_PASSWORD}
+      database: ${APPCONFIG_DOCUMENTDB_DATABASE:piggymetrics}
+      ssl:
+        enabled: true
 
 server:
   servlet:

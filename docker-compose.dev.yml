@@ -19,41 +19,53 @@ services:
     build: auth-service
     ports:
       - 5000:5000
-
-  auth-mongodb:
-    build: mongodb
-    ports:
-      - 25000:27017
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config:8888
+      SPRING_DATA_MONGODB_URI: ${APPCONFIG_DOCUMENTDB_AUTH_URI}
+      SPRING_DATA_MONGODB_SSL_ENABLED: "true"
+      SPRING_DATA_MONGODB_SSL_INVALID_HOSTNAME_ALLOWED: "false"
+      DOCUMENTDB_USERNAME: ${APPCONFIG_DOCUMENTDB_USERNAME}
+      DOCUMENTDB_PASSWORD: ${APPCONFIG_DOCUMENTDB_PASSWORD}
+      DOCUMENTDB_TLS_CA_FILE: ${APPCONFIG_DOCUMENTDB_TLS_CA_FILE}
 
   account-service:
     build: account-service
     ports:
       - 6000:6000
-
-  account-mongodb:
-    build: mongodb
-    ports:
-      - 26000:27017
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config:8888
+      SPRING_DATA_MONGODB_URI: ${APPCONFIG_DOCUMENTDB_ACCOUNT_URI}
+      SPRING_DATA_MONGODB_SSL_ENABLED: "true"
+      SPRING_DATA_MONGODB_SSL_INVALID_HOSTNAME_ALLOWED: "false"
+      DOCUMENTDB_USERNAME: ${APPCONFIG_DOCUMENTDB_USERNAME}
+      DOCUMENTDB_PASSWORD: ${APPCONFIG_DOCUMENTDB_PASSWORD}
+      DOCUMENTDB_TLS_CA_FILE: ${APPCONFIG_DOCUMENTDB_TLS_CA_FILE}
 
   statistics-service:
     build: statistics-service
     ports:
       - 7000:7000
-
-  statistics-mongodb:
-    build: mongodb
-    ports:
-      - 27000:27017
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config:8888
+      SPRING_DATA_MONGODB_URI: ${APPCONFIG_DOCUMENTDB_STATISTICS_URI}
+      SPRING_DATA_MONGODB_SSL_ENABLED: "true"
+      SPRING_DATA_MONGODB_SSL_INVALID_HOSTNAME_ALLOWED: "false"
+      DOCUMENTDB_USERNAME: ${APPCONFIG_DOCUMENTDB_USERNAME}
+      DOCUMENTDB_PASSWORD: ${APPCONFIG_DOCUMENTDB_PASSWORD}
+      DOCUMENTDB_TLS_CA_FILE: ${APPCONFIG_DOCUMENTDB_TLS_CA_FILE}
 
   notification-service:
     build: notification-service
     ports:
       - 8000:8000
-
-  notification-mongodb:
-    build: mongodb
-    ports:
-      - 28000:27017
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config:8888
+      SPRING_DATA_MONGODB_URI: ${APPCONFIG_DOCUMENTDB_NOTIFICATION_URI}
+      SPRING_DATA_MONGODB_SSL_ENABLED: "true"
+      SPRING_DATA_MONGODB_SSL_INVALID_HOSTNAME_ALLOWED: "false"
+      DOCUMENTDB_USERNAME: ${APPCONFIG_DOCUMENTDB_USERNAME}
+      DOCUMENTDB_PASSWORD: ${APPCONFIG_DOCUMENTDB_PASSWORD}
+      DOCUMENTDB_TLS_CA_FILE: ${APPCONFIG_DOCUMENTDB_TLS_CA_FILE}
 
   monitoring:
     build: monitoring

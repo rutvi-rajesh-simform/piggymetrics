@@ -1,9 +1,9 @@
 spring:
   application:
     name: notification-service
+  config:
+    import: optional:aws-parameterstore:
   cloud:
-    config:
-      uri: http://config:8888
-      fail-fast: true
-      password: ${CONFIG_SERVICE_PASSWORD}
-      username: user
+    aws:
+      parameterstore:
+        region: ${AWS_REGION}

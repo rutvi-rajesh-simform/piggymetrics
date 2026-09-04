@@ -1,0 +1,82 @@
+{
+  "family": "account-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_TASK_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ACCOUNT_SERVICE_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "account-service",
+      "image": "${ACCOUNT_SERVICE_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "name": "http"
+        }
+      ],
+      "environment": [
+        { "name": "AWS_REGION", "value": "${AWS_REGION}" },
+        { "name": "AWS_DEFAULT_REGION", "value": "${AWS_REGION}" },
+
+        { "name": "DOCDB_ENDPOINT", "value": "${DOCDB_ENDPOINT}" },
+        { "name": "DOCDB_PORT", "value": "${DOCDB_PORT}" },
+        { "name": "DOCDB_DATABASE", "value": "${DOCDB_DATABASE}" },
+        { "name": "DOCDB_TLS_ENABLED", "value": "true" },
+
+        { "name": "APPCONFIG_APPLICATION_ID", "value": "${APPCONFIG_APPLICATION_ID}" },
+        { "name": "APPCONFIG_ENVIRONMENT_ID", "value": "${APPCONFIG_ENVIRONMENT_ID}" },
+        { "name": "APPCONFIG_CONFIGURATION_PROFILE_ID", "value": "${APPCONFIG_CONFIGURATION_PROFILE_ID}" },
+        { "name": "APPCONFIG_POLL_INTERVAL_SECONDS", "value": "45" },
+
+        { "name": "SNS_TOPIC_ARN", "value": "${SNS_TOPIC_ARN}" },
+        { "name": "SQS_QUEUE_URL", "value": "${SQS_QUEUE_URL}" },
+        { "name": "SQS_QUEUE_NAME", "value": "${SQS_QUEUE_NAME}" },
+
+        { "name": "CLOUD_MAP_NAMESPACE", "value": "${CLOUD_MAP_NAMESPACE}" },
+        { "name": "CLOUD_MAP_SERVICE_NAME", "value": "account-service" },
+
+        { "name": "API_BASE_PATH", "value": "/account" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ],
+      "secrets": [
+        { "name": "DOCDB_USERNAME", "valueFrom": "${DOCDB_USERNAME_SECRET_ARN}" },
+        { "name": "DOCDB_PASSWORD", "valueFrom": "${DOCDB_PASSWORD_SECRET_ARN}" },
+        { "name": "APPCONFIG_EXTENSION_PREFETCH_LIST", "valueFrom": "${APPCONFIG_PREFETCH_SECRET_ARN}" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/account-service",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      }
+    }
+  ],
+  "tags": [
+    { "key": "Service", "value": "account-service" },
+    { "key": "Environment", "value": "${ENVIRONMENT}" },
+    { "key": "ManagedBy", "value": "iac" }
+  ]
+}

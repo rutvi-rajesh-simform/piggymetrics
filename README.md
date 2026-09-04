@@ -23,9 +23,9 @@ Contains general input logic and validation: incomes/expenses items, savings and
 
 Method	| Path	| Description	| User authenticated	| Available from UI
 ------------- | ------------------------- | ------------- |:-------------:|:----------------:|
-GET	| /accounts/{account}	| Get specified account data	|  | 	
+GET	| /accounts/{account}	| Get specified account data	|  |	
 GET	| /accounts/current	| Get current account data	| × | ×
-GET	| /accounts/demo	| Get demo account data (pre-filled incomes/expenses items, etc)	|   | 	×
+GET	| /accounts/demo	| Get demo account data (pre-filled incomes/expenses items, etc)	|   |	×
 PUT	| /accounts/current	| Save current account data	| × | ×
 POST	| /accounts/	| Register new account	|   | ×
 
@@ -35,7 +35,7 @@ Performs calculations on major statistics parameters and captures time series fo
 
 Method	| Path	| Description	| User authenticated	| Available from UI
 ------------- | ------------------------- | ------------- |:-------------:|:----------------:|
-GET	| /statistics/{account}	| Get specified account statistics	          |  | 	
+GET	| /statistics/{account}	| Get specified account statistics	          |  |	
 GET	| /statistics/current	| Get current account statistics	| × | × 
 GET	| /statistics/demo	| Get demo account statistics	|   | × 
 PUT	| /statistics/{account}	| Create or update time series datapoint for specified account	|   | 
@@ -55,38 +55,61 @@ PUT	| /notifications/settings/current	| Save current account notification settin
 - All services are talking to each other via the Rest API
 
 ## Infrastructure
-[Spring cloud](https://spring.io/projects/spring-cloud) provides powerful tools for developers to quickly implement common distributed systems patterns -
-<img width="880" alt="Infrastructure services" src="https://cloud.githubusercontent.com/assets/6069066/13906840/365c0d94-eefa-11e5-90ad-9d74804ca412.png">
-### Config service
-[Spring Cloud Config](http://cloud.spring.io/spring-cloud-config/spring-cloud-config.html) is horizontally scalable centralized configuration service for the distributed systems. It uses a pluggable repository layer that currently supports local storage, Git, and Subversion.
+[Spring cloud](https://spring.io/projects/spring-cloud) provides powerful tools for developers to quickly implement common distributed systems patterns.
 
-In this project, we are going to use `native profile`, which simply loads config files from the local classpath. You can see `shared` directory in [Config service resources](https://github.com/sqshq/PiggyMetrics/tree/master/config/src/main/resources). Now, when Notification-service requests its configuration, Config service responses with `shared/notification-service.yml` and `shared/application.yml` (which is shared between all client applications).
+<img width="880" alt="Infrastructure services" src="https://cloud.githubusercontent.com/assets/6069066/13906840/365c0d94-eefa-11e5-90ad-9d74804ca412.png">
+
+### Dependency migration (messaging, discovery, config)
+
+This project now uses AWS-native messaging/discovery/config integration for event flow and service registration.
+
+#### Removed dependencies
+- `spring-cloud-starter-bus-amqp`
+- `spring-cloud-starter-netflix-eureka-client`
+- `spring-cloud-starter-netflix-eureka-server`
+
+#### Added dependencies
+```xml
+<dependency>
+  <groupId>io.awspring.cloud</groupId>
+  <artifactId>spring-cloud-aws-starter-sqs</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.awspring.cloud</groupId>
+  <artifactId>spring-cloud-aws-starter-sns</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.awspring.cloud</groupId>
+  <artifactId>spring-cloud-aws-starter-parameter-store-config</artifactId>
+</dependency>
+<dependency>
+  <groupId>software.amazon.awssdk</groupId>
+  <artifactId>servicediscovery</artifactId>
+</dependency>
+```
+
+### Config service
+[Spring Cloud Config](http://cloud.spring.io/spring-cloud-config/spring-cloud-config.html) can still be used for centralized configuration where needed, but runtime configuration distribution is now aligned with AWS config sources.
+
+In this setup, services can resolve configuration from AWS Systems Manager Parameter Store (via Spring Cloud AWS config support) while keeping local profiles for development.
 
 ##### Client side usage
-Just build Spring Boot application with `spring-cloud-starter-config` dependency, autoconfiguration will do the rest.
+Build Spring Boot applications with:
+- `spring-cloud-starter-config` (if Config Server is still used)
+- `spring-cloud-aws-starter-parameter-store-config` for AWS-backed configuration
 
-Now you don't need any embedded properties in your application. Just provide `bootstrap.yml` with application name and Config service url:
+Example bootstrap configuration:
 ```yml
 spring:
   application:
     name: notification-service
-  cloud:
-    config:
-      uri: http://config:8888
-      fail-fast: true
+  config:
+    import: aws-parameterstore:/config/notification-service/
 ```
 
-##### With Spring Cloud Config, you can change application config dynamically. 
-For example, [EmailService bean](https://github.com/sqshq/PiggyMetrics/blob/master/notification-service/src/main/java/com/piggymetrics/notification/service/EmailServiceImpl.java) is annotated with `@RefreshScope`. That means you can change e-mail text and subject without rebuild and restart the Notification service.
-
-First, change required properties in Config server. Then make a refresh call to the Notification service:
-`curl -H "Authorization: Bearer #token#" -XPOST http://127.0.0.1:8000/notifications/refresh`
-
-You could also use Repository [webhooks to automate this process](http://cloud.spring.io/spring-cloud-config/spring-cloud-config.html#_push_notifications_and_spring_cloud_bus)
-
 ##### Notes
-- `@RefreshScope` doesn't work with `@Configuration` classes and doesn't ignores `@Scheduled` methods
-- `fail-fast` property means that Spring Boot application will fail startup immediately, if it cannot connect to the Config Service.
+- Keep `fail-fast` behavior enabled for critical config sources.
+- Prefer scoped paths in Parameter Store (for example `/config/<service-name>/`) to isolate service settings.
 
 ### Auth service
 Authorization responsibilities are extracted to a separate server, which grants [OAuth2 tokens](https://tools.ietf.org/html/rfc6749) for the backend resource services. Auth Server is used for user authorization as well as for secure machine-to-machine communication inside the perimeter.
@@ -108,47 +131,42 @@ public List<DataPoint> getStatisticsByAccountName(@PathVariable String name) {
 ```
 
 ### API Gateway
-API Gateway is a single entry point into the system, used to handle requests and routing them to the appropriate backend service or by [aggregating results from a scatter-gather call](http://techblog.netflix.com/2013/01/optimizing-netflix-api.html). Also, it can be used for authentication, insights, stress and canary testing, service migration, static response handling and active traffic management.
+Amazon API Gateway is the single entry point into the system, used to handle requests and route them to the appropriate backend service or by [aggregating results from a scatter-gather call](http://techblog.netflix.com/2013/01/optimizing-netflix-api.html). It can also be used for authentication, insights, stress and canary testing, service migration, static response handling and active traffic management.
 
-Netflix opensourced [such an edge service](http://techblog.netflix.com/2013/06/announcing-zuul-edge-service-in-cloud.html) and Spring Cloud allows to use it with a single `@EnableZuulProxy` annotation. In this project, we use Zuul to store some static content (the UI application) and to route requests to appropriate the microservices. Here's a simple prefix-based routing configuration for the Notification service:
+In this project, gateway behavior is implemented with Amazon API Gateway resources, methods, integrations, and stages. A simple route for the Notification service can be configured as follows:
 
-```yml
-zuul:
-  routes:
-    notification-service:
-        path: /notifications/**
-        serviceId: notification-service
-        stripPrefix: false
-
+```text
+Resource: /notifications/{proxy+}
+Method: ANY
+Integration: HTTP endpoint for notification-service
+Stage: prod
 ```
 
-That means all requests starting with `/notifications` will be routed to the Notification service. There is no hardcoded addresses, as you can see. Zuul uses [Service discovery](https://github.com/sqshq/PiggyMetrics/blob/master/README.md#service-discovery) mechanism to locate Notification service instances and also [Circuit Breaker and Load Balancer](https://github.com/sqshq/PiggyMetrics/blob/master/README.md#http-client-load-balancer-and-circuit-breaker), described below.
+That means all requests starting with `/notifications` will be routed to the Notification service through API Gateway integration.
 
 ### Service Discovery
 
 Service Discovery allows automatic detection of the network locations for all registered services. These locations might have dynamically assigned addresses due to auto-scaling, failures or upgrades.
 
-The key part of Service discovery is the Registry. In this project, we use Netflix Eureka. Eureka is a good example of the client-side discovery pattern, where client is responsible for looking up the locations of available service instances and load balancing between them.
+The registry implementation in this project is now AWS Cloud Map (instead of Eureka). Services register their instance metadata in Cloud Map, and clients resolve healthy endpoints through Cloud Map APIs or integrated service discovery clients.
 
-With Spring Boot, you can easily build Eureka Registry using the `spring-cloud-starter-eureka-server` dependency, `@EnableEurekaServer` annotation and simple configuration properties.
+Client support includes startup registration and periodic health updates. During deployment/scale events, Cloud Map namespace records are updated automatically.
 
-Client support enabled with `@EnableDiscoveryClient` annotation a `bootstrap.yml` with application name:
-``` yml
-spring:
-  application:
-    name: notification-service
+Example application properties:
+```yml
+aws:
+  cloudmap:
+    namespace: piggymetrics.local
+    service:
+      name: notification-service
 ```
-
-This service will be registered with the Eureka Server and provided with metadata such as host, port, health indicator URL, home page etc. Eureka receives heartbeat messages from each instance belonging to the service. If the heartbeat fails over a configurable timetable, the instance will be removed from the registry.
-
-Also, Eureka provides a simple interface where you can track running services and a number of available instances: `http://localhost:8761`
 
 ### Load balancer, Circuit breaker and Http client
 
 #### Ribbon
 Ribbon is a client side load balancer which gives you a lot of control over the behaviour of HTTP and TCP clients. Compared to a traditional load balancer, there is no need in additional network hop - you can contact desired service directly.
 
-Out of the box, it natively integrates with Spring Cloud and Service Discovery. [Eureka Client](https://github.com/sqshq/PiggyMetrics#service-discovery) provides a dynamic list of available servers so Ribbon could balance between them.
+Out of the box, it integrates with service discovery metadata and can balance requests across healthy instances.
 
 #### Hystrix
 Hystrix is the implementation of [Circuit Breaker Pattern](http://martinfowler.com/bliki/CircuitBreaker.html), which gives us a control over latency and network failures while communicating with other services. The main idea is to stop cascading failures in the distributed environment - that helps to fail fast and recover as soon as possible - important aspects of a fault-tolerant system that can self-heal.
@@ -156,7 +174,7 @@ Hystrix is the implementation of [Circuit Breaker Pattern](http://martinfowler.c
 Moreover, Hystrix generates metrics on execution outcomes and latency for each command, that we can use to [monitor system's behavior](https://github.com/sqshq/PiggyMetrics#monitor-dashboard).
 
 #### Feign
-Feign is a declarative Http client which seamlessly integrates with Ribbon and Hystrix. Actually, a single `spring-cloud-starter-feign` dependency and `@EnableFeignClients` annotation gives us a full set of tools, including Load balancer, Circuit Breaker and Http client with reasonable default configuration.
+Feign is a declarative Http client which seamlessly integrates with load balancing and circuit breaking. A single `spring-cloud-starter-openfeign` dependency and `@EnableFeignClients` annotation gives us a full set of tools, including load balancing, circuit breaker support and Http client with reasonable default configuration.
 
 Here is an example from the Account Service:
 
@@ -172,13 +190,17 @@ public interface StatisticsServiceClient {
 
 - Everything you need is just an interface
 - You can share `@RequestMapping` part between Spring MVC controller and Feign methods
-- Above example specifies just a desired service id - `statistics-service`, thanks to auto-discovery through Eureka
+- Above example specifies just a desired service id
 
 ### Monitor dashboard
 
-In this project configuration, each microservice with Hystrix on board pushes metrics to Turbine via Spring Cloud Bus (with AMQP broker). The Monitoring project is just a small Spring boot application with the [Turbine](https://github.com/Netflix/Turbine) and [Hystrix Dashboard](https://github.com/Netflix-Skunkworks/hystrix-dashboard).
+In this project configuration, each microservice publishes event and telemetry signals using AWS messaging primitives:
+- SNS topics for fan-out event publication
+- SQS queues for durable asynchronous consumption
 
-Let's see observe the behavior of our system under load: Statistics Service imitates a delay during the request processing. The response timeout is set to 1 second:
+The monitoring project remains a Spring Boot application with Turbine and Hystrix Dashboard for circuit/latency visualization, while event transport is no longer based on AMQP bus.
+
+Let's observe the behavior of our system under load: Statistics Service imitates a delay during the request processing. The response timeout is set to 1 second:
 
 <img width="880" src="https://cloud.githubusercontent.com/assets/6069066/14194375/d9a2dd80-f7be-11e5-8bcc-9a2fce753cfe.png">
 
@@ -195,7 +217,7 @@ Centralized logging can be very useful while attempting to identify problems in 
 
 Analyzing problems in distributed systems can be difficult, especially trying to trace requests that propagate from one microservice to another.
 
-[Spring Cloud Sleuth](https://cloud.spring.io/spring-cloud-sleuth/) solves this problem by providing support for the distributed tracing. It adds two types of IDs to the logging: `traceId` and `spanId`. `spanId` represents a basic unit of work, for example sending an HTTP request. The traceId contains a set of spans forming a tree-like structure. For example, with a distributed big-data store, a trace might be formed by a PUT request. Using `traceId` and `spanId` for each operation we know when and where our application is as it processes a request, making reading logs much easier. 
+[Spring Cloud Sleuth](https://cloud.spring.io/spring-cloud-sleuth/) solves this problem by providing support for the distributed tracing. It adds two types of IDs to the logging: `traceId` and `spanId`. `spanId` represents a basic unit of work, for example sending an HTTP request. The traceId contains a set of spans forming a tree-like structure. For example, with a distributed big-data store, a trace might be formed by a PUT request. Using `traceId` and `spanId` for each operation we know when and where our application is as it processes a request, making reading logs much easier.
 
 The logs are as follows, notice the `[appname,traceId,spanId,exportable]` entries from the Slf4J MDC:
 
@@ -225,7 +247,7 @@ In this [configuration](https://github.com/sqshq/PiggyMetrics/blob/master/.travi
 
 ## Let's try it out
 
-Note that starting 8 Spring Boot applications, 4 MongoDB instances and a RabbitMq requires at least 4Gb of RAM.
+Note that starting 8 Spring Boot applications and 4 MongoDB instances requires at least 4Gb of RAM.
 
 #### Before you start
 - Install Docker and Docker Compose.
@@ -245,9 +267,9 @@ If you'd like to start applications in Intellij Idea you need to either use [Env
 
 #### Important endpoints
 - http://localhost:80 - Gateway
-- http://localhost:8761 - Eureka Dashboard
-- http://localhost:9000/hystrix - Hystrix Dashboard (Turbine stream link: `http://turbine-stream-service:8080/turbine/turbine.stream`)
-- http://localhost:15672 - RabbitMq management (default login/password: guest/guest)
+- http://localhost:9000/hystrix - Hystrix Dashboard
+- AWS Console (Cloud Map) - Service registry namespace and instances
+- AWS Console (SNS/SQS) - Event topics, subscriptions, and queues
 
 ## Contributions are welcome!
 

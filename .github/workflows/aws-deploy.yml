@@ -1,0 +1,185 @@
+name: aws-deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: app-backend
+  ECS_CLUSTER: app-cluster
+  ECS_SERVICE: app-service
+  ECS_TASK_DEFINITION_FAMILY: app-task
+  ECS_CONTAINER_NAME: app
+  INFRA_STACK_NAME: app-infra
+  INFRA_TEMPLATE_FILE: infra/aws/ecs-api-infra.yml
+  APPCONFIG_STACK_NAME: app-appconfig
+  APPCONFIG_TEMPLATE_FILE: infra/aws/appconfig.yml
+  CLOUDMAP_STACK_NAME: app-cloud-map
+  CLOUDMAP_TEMPLATE_FILE: infra/aws/cloud-map.yml
+  API_GATEWAY_REST_API_ID: ""
+  API_GATEWAY_STAGE_NAME: prod
+
+jobs:
+  build_and_push:
+    name: Build Maven + Build/Push Container to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.build_image.outputs.image_uri }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Maven artifacts
+        run: mvn -B clean verify
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" --region "${AWS_REGION}" >/dev/null 2>&1 || \
+          aws ecr create-repository \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256 \
+            --region "${AWS_REGION}"
+
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        id: build_image
+        env:
+          ECR_REGISTRY: ${{ steps.login_ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker build --pull --tag "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+
+          LATEST_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+          docker tag "${IMAGE_URI}" "${LATEST_URI}"
+          docker push "${LATEST_URI}"
+
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+  deploy_infrastructure:
+    name: Deploy ECS/API + Supporting AWS Infrastructure
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy ECS/API infrastructure stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${INFRA_STACK_NAME}" \
+            --template-file "${INFRA_TEMPLATE_FILE}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides ImageUri="${{ needs.build_and_push.outputs.image_uri }}" \
+            --no-fail-on-empty-changeset \
+            --region "${AWS_REGION}"
+
+      - name: Deploy AWS AppConfig stack
+        run: |
+          if [ -f "${APPCONFIG_TEMPLATE_FILE}" ]; then
+            aws cloudformation deploy \
+              --stack-name "${APPCONFIG_STACK_NAME}" \
+              --template-file "${APPCONFIG_TEMPLATE_FILE}" \
+              --capabilities CAPABILITY_NAMED_IAM \
+              --no-fail-on-empty-changeset \
+              --region "${AWS_REGION}"
+          else
+            echo "No AppConfig template found at ${APPCONFIG_TEMPLATE_FILE}; skipping"
+          fi
+
+      - name: Deploy AWS Cloud Map stack
+        run: |
+          if [ -f "${CLOUDMAP_TEMPLATE_FILE}" ]; then
+            aws cloudformation deploy \
+              --stack-name "${CLOUDMAP_STACK_NAME}" \
+              --template-file "${CLOUDMAP_TEMPLATE_FILE}" \
+              --capabilities CAPABILITY_NAMED_IAM \
+              --no-fail-on-empty-changeset \
+              --region "${AWS_REGION}"
+          else
+            echo "No Cloud Map template found at ${CLOUDMAP_TEMPLATE_FILE}; skipping"
+          fi
+
+  deploy_ecs:
+    name: Update ECS Service to New Image
+    needs:
+      - build_and_push
+      - deploy_infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${ECS_TASK_DEFINITION_FAMILY}" \
+            --query taskDefinition > task-definition.json
+
+      - name: Render updated task definition
+        id: render_taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ needs.build_and_push.outputs.image_uri }}
+
+      - name: Deploy task definition to ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render_taskdef.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Create API Gateway deployment (optional)
+        run: |
+          if [ -n "${API_GATEWAY_REST_API_ID}" ]; then
+            aws apigateway create-deployment \
+              --rest-api-id "${API_GATEWAY_REST_API_ID}" \
+              --stage-name "${API_GATEWAY_STAGE_NAME}" \
+              --region "${AWS_REGION}"
+          else
+            echo "API_GATEWAY_REST_API_ID is not set; skipping API deployment"
+          fi

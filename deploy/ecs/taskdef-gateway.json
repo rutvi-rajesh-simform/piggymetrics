@@ -1,0 +1,114 @@
+{
+  "family": "gateway-taskdef",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<account-id>:role/gatewayTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "gateway",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/gateway:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "name": "gateway-http",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "<region>"
+        },
+        {
+          "name": "API_GATEWAY_STAGE",
+          "value": "prod"
+        },
+        {
+          "name": "SQS_QUEUE_URL",
+          "value": "https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>"
+        },
+        {
+          "name": "SNS_TOPIC_ARN",
+          "value": "arn:aws:sns:<region>:<account-id>:<topic-name>"
+        },
+        {
+          "name": "DOCUMENTDB_ENDPOINT",
+          "value": "<docdb-cluster-endpoint>"
+        },
+        {
+          "name": "DOCUMENTDB_PORT",
+          "value": "27017"
+        },
+        {
+          "name": "DOCUMENTDB_DATABASE",
+          "value": "gateway"
+        },
+        {
+          "name": "APPCONFIG_APPLICATION",
+          "value": "gateway-app"
+        },
+        {
+          "name": "APPCONFIG_ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "APPCONFIG_PROFILE",
+          "value": "gateway-config"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "internal.local"
+        },
+        {
+          "name": "CLOUD_MAP_SERVICE_NAME",
+          "value": "gateway"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCUMENTDB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/documentdb:username::"
+        },
+        {
+          "name": "DOCUMENTDB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:gateway/documentdb:password::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/gateway",
+          "awslogs-region": "<region>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "dockerLabels": {
+        "com.amazonaws.ecs.service-discovery.enabled": "true",
+        "com.amazonaws.ecs.service-discovery.namespace": "internal.local",
+        "com.amazonaws.ecs.service-discovery.service": "gateway"
+      }
+    }
+  ],
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  }
+}

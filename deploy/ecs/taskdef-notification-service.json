@@ -1,0 +1,127 @@
+{
+  "family": "notification-service",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskRole-notification-service",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole-notification-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "notification-service",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/notification-service:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "SPRING_PROFILES_ACTIVE",
+          "value": "aws"
+        },
+        {
+          "name": "SERVER_PORT",
+          "value": "8080"
+        },
+        {
+          "name": "API_GATEWAY_BASE_URL",
+          "value": "${API_GATEWAY_BASE_URL}"
+        },
+        {
+          "name": "DOCDB_URI",
+          "value": "${DOCDB_URI}"
+        },
+        {
+          "name": "DOCDB_DATABASE",
+          "value": "${DOCDB_DATABASE}"
+        },
+        {
+          "name": "DOCDB_NOTIFICATIONS_COLLECTION",
+          "value": "${DOCDB_NOTIFICATIONS_COLLECTION}"
+        },
+        {
+          "name": "SQS_NOTIFICATION_QUEUE_URL",
+          "value": "${SQS_NOTIFICATION_QUEUE_URL}"
+        },
+        {
+          "name": "SQS_NOTIFICATION_DLQ_URL",
+          "value": "${SQS_NOTIFICATION_DLQ_URL}"
+        },
+        {
+          "name": "SNS_NOTIFICATION_TOPIC_ARN",
+          "value": "${SNS_NOTIFICATION_TOPIC_ARN}"
+        },
+        {
+          "name": "APPCONFIG_APPLICATION_ID",
+          "value": "${APPCONFIG_APPLICATION_ID}"
+        },
+        {
+          "name": "APPCONFIG_ENVIRONMENT_ID",
+          "value": "${APPCONFIG_ENVIRONMENT_ID}"
+        },
+        {
+          "name": "APPCONFIG_CONFIGURATION_PROFILE_ID",
+          "value": "${APPCONFIG_CONFIGURATION_PROFILE_ID}"
+        },
+        {
+          "name": "CLOUD_MAP_NAMESPACE",
+          "value": "${CLOUD_MAP_NAMESPACE}"
+        },
+        {
+          "name": "CLOUD_MAP_SERVICE_NAME",
+          "value": "notification-service"
+        },
+        {
+          "name": "NOTIFICATION_WORKERS",
+          "value": "${NOTIFICATION_WORKERS}"
+        },
+        {
+          "name": "NOTIFICATION_MAX_RETRIES",
+          "value": "${NOTIFICATION_MAX_RETRIES}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOCDB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:notification-service/docdb:username::"
+        },
+        {
+          "name": "DOCDB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:notification-service/docdb:password::"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/notification-service",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

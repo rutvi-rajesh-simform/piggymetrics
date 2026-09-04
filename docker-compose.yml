@@ -1,35 +1,10 @@
 version: '2.1'
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    restart: always
-    ports:
-      - 15672:15672
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
   config:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
     image: sqshq/piggymetrics-config
     restart: always
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "10"
-
-  registry:
-    environment:
-      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-registry
-    restart: always
-    depends_on:
-      config:
-        condition: service_healthy
-    ports:
-      - 8761:8761
     logging:
       options:
         max-size: "10m"
@@ -133,6 +108,7 @@ services:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
       MONGODB_PASSWORD: $MONGODB_PASSWORD
       NOTIFICATION_SERVICE_PASSWORD: $NOTIFICATION_SERVICE_PASSWORD
+      SQS_QUEUE_URL: $SQS_QUEUE_URL
     image: sqshq/piggymetrics-notification-service
     restart: always
     depends_on:
@@ -171,13 +147,14 @@ services:
   turbine-stream-service:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      SQS_QUEUE_URL: $SQS_QUEUE_URL
     image: sqshq/piggymetrics-turbine-stream-service
     restart: always
     depends_on:
       config:
         condition: service_healthy
     ports:
-    - 8989:8989
+      - 8989:8989
     logging:
       options:
         max-size: "10m"
